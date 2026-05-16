@@ -1,0 +1,3 @@
+scheme,totalCoolingCapacityKw,lifecycleCost,redundancyRate,costReductionRate,redundancyReductionRate
+baseline,400,8258466,0.4622942,0,0
+optimized,350,4581585,0.1738359,0.4452257,0.6239712
