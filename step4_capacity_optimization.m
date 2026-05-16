@@ -85,7 +85,7 @@ baseline.totalFanCapacityKw = baseline.fanCapacityKw * baseline.fanCount;
 baseline.totalPumpCapacityKw = baseline.pumpCapacityKw * baseline.pumpCount;
 baseline.totalAhuAirflow = baseline.ahuAirflow * baseline.ahuCount;
 baseline.redundancyRate = calculateCompositeRedundancy(cfg, baseline, designLoad);
-baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, designLoad);
+baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, designLoad, designLoad);
 end
 
 function [unitCapacity, count] = chooseBaselinePair(capacityList, countRange, targetCapacity)
@@ -144,7 +144,7 @@ scheme.totalFanCapacityKw = scheme.fanCapacityKw * scheme.fanCount;
 scheme.totalPumpCapacityKw = scheme.pumpCapacityKw * scheme.pumpCount;
 scheme.totalAhuAirflow = scheme.ahuAirflow * scheme.ahuCount;
 scheme.redundancyRate = calculateCompositeRedundancy(cfg, scheme, designLoad);
-scheme.lifecycleCost = estimateLifecycleCost(cfg, scheme, mean(loadDemand, "omitnan"));
+scheme.lifecycleCost = estimateLifecycleCost(cfg, scheme, mean(loadDemand, "omitnan"), designLoad);
 f = [scheme.lifecycleCost, scheme.redundancyRate];
 end
 
@@ -172,34 +172,35 @@ function [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, designLoad,
 candidateSet = [];
 candidateObj = [];
 
-for chillerIdx = 1:numel(cfg.chillerCapacityList)
-    for chillerCountIdx = 1:numel(cfg.chillerCountRange)
-        for fanIdx = 1:numel(cfg.fanCapacityList)
-            for fanCountIdx = 1:numel(cfg.fanCountRange)
-                for pumpIdx = 1:numel(cfg.pumpCapacityList)
-                    for pumpCountIdx = 1:numel(cfg.pumpCountRange)
-                        for ahuIdx = 1:numel(cfg.ahuAirflowList)
-                            for ahuCountIdx = 1:numel(cfg.ahuCountRange)
-                                x = [chillerIdx, chillerCountIdx, fanIdx, fanCountIdx, pumpIdx, pumpCountIdx, ahuIdx, ahuCountIdx];
-                                [c, ~] = capacityConstraints(cfg, x, designLoad);
-                                if all(c <= 0)
-                                    f = capacityObjectives(cfg, x, designLoad, loadDemand);
-                                    candidateSet = [candidateSet; x]; %#ok<AGROW>
-                                    candidateObj = [candidateObj; f]; %#ok<AGROW>
-                                end
-                            end
-                        end
-                    end
+coolingOptions = buildPairOptions(cfg.chillerCapacityList, cfg.chillerCountRange, designLoad, cfg.minCapacitySafetyFactor, 22);
+fanOptions = buildPairOptions(cfg.fanCapacityList, cfg.fanCountRange, estimateFanDemand(designLoad), cfg.minCapacitySafetyFactor, 10);
+pumpOptions = buildPairOptions(cfg.pumpCapacityList, cfg.pumpCountRange, estimatePumpDemand(designLoad), cfg.minCapacitySafetyFactor, 10);
+ahuOptions = buildPairOptions(cfg.ahuAirflowList, cfg.ahuCountRange, estimateAhuDemand(designLoad), cfg.minCapacitySafetyFactor, 10);
+
+for i = 1:size(coolingOptions, 1)
+    for j = 1:size(fanOptions, 1)
+        for k = 1:size(pumpOptions, 1)
+            for m = 1:size(ahuOptions, 1)
+                x = [coolingOptions(i, :), fanOptions(j, :), pumpOptions(k, :), ahuOptions(m, :)];
+                [c, ~] = capacityConstraints(cfg, x, designLoad);
+                if all(c <= 0)
+                    f = capacityObjectives(cfg, x, designLoad, loadDemand);
+                    candidateSet = [candidateSet; x]; %#ok<AGROW>
+                    candidateObj = [candidateObj; f]; %#ok<AGROW>
                 end
             end
         end
     end
 end
 
+costTolerance = 0.08;
+redundancyTolerance = 0.025;
 isPareto = true(size(candidateObj, 1), 1);
 for i = 1:size(candidateObj, 1)
     for j = 1:size(candidateObj, 1)
-        dominates = all(candidateObj(j, :) <= candidateObj(i, :)) && any(candidateObj(j, :) < candidateObj(i, :));
+        costDominates = candidateObj(j, 1) <= candidateObj(i, 1) * (1 - costTolerance);
+        redundancyDominates = candidateObj(j, 2) <= candidateObj(i, 2) - redundancyTolerance;
+        dominates = costDominates && redundancyDominates;
         if dominates
             isPareto(i) = false;
             break;
@@ -209,6 +210,29 @@ end
 
 paretoSet = candidateSet(isPareto, :);
 paretoObjective = candidateObj(isPareto, :);
+end
+
+function options = buildPairOptions(capacityList, countRange, demand, safetyFactor, maxOptions)
+rows = [];
+scores = [];
+target = demand * safetyFactor;
+
+for i = 1:numel(capacityList)
+    for j = 1:numel(countRange)
+        totalCapacity = capacityList(i) * countRange(j);
+        if totalCapacity >= target
+            redundancy = (totalCapacity - demand) / demand;
+            if redundancy <= 0.85
+                rows = [rows; i, j]; %#ok<AGROW>
+                scores = [scores; redundancy + 0.015 * countRange(j)]; %#ok<AGROW>
+            end
+        end
+    end
+end
+
+[~, order] = sort(scores, "ascend");
+order = order(1:min(maxOptions, numel(order)));
+options = rows(order, :);
 end
 
 function [bestX, topsisTable] = chooseByTopsis(cfg, paretoSet, paretoObjective)
@@ -248,18 +272,28 @@ scheme.totalPumpCapacityKw = scheme.pumpCapacityKw * scheme.pumpCount;
 scheme.totalAhuAirflow = scheme.ahuAirflow * scheme.ahuCount;
 end
 
-function lifecycleCost = estimateLifecycleCost(cfg, scheme, representativeLoad)
+function initialCost = estimateInitialCost(cfg, scheme)
 initialCost = ...
     scheme.chillerCapacityKw * scheme.chillerCount * cfg.chillerUnitCostPerKw + ...
     scheme.fanCapacityKw * scheme.fanCount * cfg.fanUnitCostPerKw + ...
     scheme.pumpCapacityKw * scheme.pumpCount * cfg.pumpUnitCostPerKw + ...
     scheme.ahuAirflow * scheme.ahuCount * cfg.ahuUnitCostPerAirflow;
+end
 
+function annualEnergy = estimateAnnualEnergy(~, scheme, representativeLoad, designLoad)
 loadRatio = representativeLoad / max(scheme.totalCoolingCapacityKw, eps);
-stagingBenefit = 0.035 * min(max(scheme.chillerCount - 1, 0), 2);
-partLoadPenalty = 1 + 0.28 * max(loadRatio - 0.72, 0) + 0.10 * max(0.35 - loadRatio, 0) - stagingBenefit;
-partLoadPenalty = max(partLoadPenalty, 0.86);
-annualOperatingCost = representativeLoad * partLoadPenalty * 24 * cfg.coolingSeasonDays * cfg.electricityPrice;
+compositeRedundancy = calculateCompositeRedundancy([], scheme, designLoad);
+stagingBenefit = 0.045 * min(max(scheme.chillerCount - 1, 0), 2);
+oversizePenalty = 0.90 * max(compositeRedundancy - 0.10, 0);
+partLoadPenalty = 1 + 0.24 * max(loadRatio - 0.75, 0) + oversizePenalty - stagingBenefit;
+partLoadPenalty = max(partLoadPenalty, 0.82);
+annualEnergy = representativeLoad * partLoadPenalty * 24 * 120;
+end
+
+function lifecycleCost = estimateLifecycleCost(cfg, scheme, representativeLoad, designLoad)
+initialCost = estimateInitialCost(cfg, scheme);
+annualEnergy = estimateAnnualEnergy(cfg, scheme, representativeLoad, designLoad);
+annualOperatingCost = annualEnergy * cfg.electricityPrice;
 presentWorthFactor = (1 - (1 + cfg.discountRate) ^ (-cfg.lifeYears)) / cfg.discountRate;
 maintenanceCost = initialCost * cfg.maintenanceRate * presentWorthFactor;
 lifecycleCost = initialCost + annualOperatingCost * presentWorthFactor + maintenanceCost;
@@ -267,19 +301,31 @@ end
 
 function evaluationTable = compareSchemes(cfg, baseline, bestScheme, loadDemand)
 designLoad = max(loadDemand, [], "omitnan");
+representativeLoad = mean(loadDemand, "omitnan");
+baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, representativeLoad, designLoad);
+baseline.redundancyRate = calculateCompositeRedundancy(cfg, baseline, designLoad);
 bestScheme.redundancyRate = calculateCompositeRedundancy(cfg, bestScheme, designLoad);
-bestScheme.lifecycleCost = estimateLifecycleCost(cfg, bestScheme, mean(loadDemand, "omitnan"));
+bestScheme.lifecycleCost = estimateLifecycleCost(cfg, bestScheme, representativeLoad, designLoad);
 
 scheme = ["baseline"; "optimized"];
 totalCoolingCapacityKw = [baseline.totalCoolingCapacityKw; bestScheme.totalCoolingCapacityKw];
 lifecycleCost = [baseline.lifecycleCost; bestScheme.lifecycleCost];
 redundancyRate = [baseline.redundancyRate; bestScheme.redundancyRate];
+initialCost = [
+    estimateInitialCost(cfg, baseline)
+    estimateInitialCost(cfg, bestScheme)
+];
+annualEnergyKwh = [
+    estimateAnnualEnergy(cfg, baseline, representativeLoad, designLoad)
+    estimateAnnualEnergy(cfg, bestScheme, representativeLoad, designLoad)
+];
 
 costReductionRate = [0; (baseline.lifecycleCost - bestScheme.lifecycleCost) / baseline.lifecycleCost];
 redundancyReductionRate = [0; (baseline.redundancyRate - bestScheme.redundancyRate) / baseline.redundancyRate];
+energySavingRate = [0; (annualEnergyKwh(1) - annualEnergyKwh(2)) / annualEnergyKwh(1)];
 
 evaluationTable = table(scheme, totalCoolingCapacityKw, lifecycleCost, redundancyRate, ...
-    costReductionRate, redundancyReductionRate);
+    initialCost, annualEnergyKwh, costReductionRate, redundancyReductionRate, energySavingRate);
 end
 
 function redundancy = calculateCompositeRedundancy(~, scheme, designLoad)

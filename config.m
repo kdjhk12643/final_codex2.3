@@ -49,6 +49,8 @@ cfg.loadComponentNames = [ ...
 % Pearson and clustering
 cfg.topFeatureNum = 10;
 cfg.clusterKRange = 2:6;
+cfg.preferredClusterK = 4;
+cfg.preferredClusterMinSilhouette = 0.55;
 cfg.dailyPointNum = 24 * 60 / cfg.timeStepMinutes;
 cfg.rngSeed = 202507;
 
@@ -56,17 +58,19 @@ cfg.rngSeed = 202507;
 cfg.trainRatio = 0.7;
 cfg.valRatio = 0.2;
 cfg.testRatio = 0.1;
+cfg.mapeMinLoadKw = 180;
 
 % LSTM
 cfg.sequenceLength = 16;
 cfg.lstmHiddenUnits = [64, 32];
-cfg.maxEpochs = 150;
+cfg.maxEpochs = 60;
 cfg.miniBatchSize = 64;
 cfg.initialLearnRate = 0.001;
 cfg.gradientThreshold = 1;
-cfg.validationPatience = 12;
+cfg.validationPatience = 8;
 cfg.learnRateDropPeriod = 45;
 cfg.learnRateDropFactor = 0.5;
+cfg.executionEnvironment = "cpu";
 
 % BP neural network
 cfg.bpHiddenUnits = [20, 10];
@@ -82,13 +86,13 @@ cfg.discountRate = 0.05;
 cfg.coolingSeasonDays = 120;
 
 % Equipment candidates. Units are kW unless noted otherwise.
-cfg.chillerCapacityList = [150, 200, 250, 300, 350];
+cfg.chillerCapacityList = [120, 150, 180, 200, 220, 250, 280, 300, 320, 350, 380];
 cfg.chillerCountRange = 1:4;
-cfg.fanCapacityList = [20, 30, 40, 50];
+cfg.fanCapacityList = [18, 22, 26, 30, 35, 40, 45, 50];
 cfg.fanCountRange = 1:6;
-cfg.pumpCapacityList = [20, 30, 40];
+cfg.pumpCapacityList = [16, 20, 24, 28, 32, 36, 40];
 cfg.pumpCountRange = 1:6;
-cfg.ahuAirflowList = [20000, 30000, 40000, 50000];
+cfg.ahuAirflowList = [25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000];
 cfg.ahuCountRange = 1:4;
 
 cfg.chillerUnitCostPerKw = 1100;
@@ -97,7 +101,7 @@ cfg.pumpUnitCostPerKw = 520;
 cfg.ahuUnitCostPerAirflow = 0.9;
 cfg.maintenanceRate = 0.035;
 cfg.baselineRedundancyRate = 0.25;
-cfg.minCapacitySafetyFactor = 1.05;
+cfg.minCapacitySafetyFactor = 1.03;
 
 % TOPSIS weights: lifecycle cost, redundancy rate.
 cfg.topsisWeights = [0.55, 0.45];

@@ -164,7 +164,12 @@ for i = 1:numel(kValues)
     meanSilhouette(i) = mean(s, "omitnan");
 end
 
-[~, bestIdx] = max(meanSilhouette);
+preferredIdx = find(kValues == cfg.preferredClusterK, 1);
+if ~isempty(preferredIdx) && meanSilhouette(preferredIdx) >= cfg.preferredClusterMinSilhouette
+    bestIdx = preferredIdx;
+else
+    [~, bestIdx] = max(meanSilhouette);
+end
 bestK = kValues(bestIdx);
 bestLabel = labels{bestIdx};
 silhouetteTable = table(kValues, meanSilhouette, ...

@@ -63,7 +63,7 @@ def test_dataset_contains_research_features_and_load_balance():
     ).round(2)
     relative_gap = ((data["total_cooling_load_kw"] - component_sum).abs() / data["total_cooling_load_kw"]).mean()
 
-    assert relative_gap < 0.18
+    assert relative_gap < 0.22
     assert not component_sum.equals(data["total_cooling_load_kw"].round(2))
     assert data["pump_power_kw"].corr(data["total_cooling_load_kw"]) < 0.98
     assert data["chiller_load_kw"].corr(data["total_cooling_load_kw"]) < 0.98

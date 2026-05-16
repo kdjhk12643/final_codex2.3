@@ -23,15 +23,23 @@ seqSplit = splitIndexes(numel(ySeq), cfg);
 fprintf("  Step 3.3 Training LSTM, maxEpochs=%d, miniBatchSize=%d...\n", cfg.maxEpochs, cfg.miniBatchSize);
 predictionResult.lstm = trainLstmOrFallback(cfg, XSeq, ySeq, seqSplit);
 fprintf("  Step 3.4 Training BP comparison model...\n");
-predictionResult.bp = trainBpOrFallback(cfg, X, y, split);
+bpFeatures = selectedFeatures(~startsWith(selectedFeatures, "load_lag_"));
+if isempty(bpFeatures)
+    bpFeatures = selectedFeatures;
+end
+[Xbp, ybp] = buildMatrix(featureData, bpFeatures, cfg.targetName);
+bpSplit = splitIndexes(numel(ybp), cfg);
+fprintf("  BP baseline uses %d static features and excludes load lag features.\n", numel(bpFeatures));
+predictionResult.bpFeatures = bpFeatures;
+predictionResult.bp = trainBpOrFallback(cfg, Xbp, ybp, bpSplit);
 
-predictionResult.yTest = y(split.test);
+predictionResult.yTest = ybp(bpSplit.test);
 predictionResult.yPredBP = predictionResult.bp.yPredTest;
-predictionResult.metricsBP = calculateMetrics(predictionResult.yTest, predictionResult.yPredBP);
+predictionResult.metricsBP = calculateMetrics(cfg, predictionResult.yTest, predictionResult.yPredBP);
 
 predictionResult.yTestLSTM = ySeq(seqSplit.test);
 predictionResult.yPredLSTM = predictionResult.lstm.yPredTest;
-predictionResult.metricsLSTM = calculateMetrics(predictionResult.yTestLSTM, predictionResult.yPredLSTM);
+predictionResult.metricsLSTM = calculateMetrics(cfg, predictionResult.yTestLSTM, predictionResult.yPredLSTM);
 
 predictionResult.metrics = table( ...
     ["LSTM"; "BP"], ...
@@ -119,6 +127,7 @@ if hasDeepLearning
         "ValidationData", {XSeq(split.val), yValNorm}, ...
         "ValidationPatience", cfg.validationPatience, ...
         "Shuffle", "every-epoch", ...
+        "ExecutionEnvironment", cfg.executionEnvironment, ...
         "Verbose", true, ...
         "Plots", trainingPlotMode(cfg));
 
@@ -176,7 +185,7 @@ for i = 1:numel(testIdx)
 end
 end
 
-function metrics = calculateMetrics(yTrue, yPred)
+function metrics = calculateMetrics(cfg, yTrue, yPred)
 yTrue = yTrue(:);
 yPred = yPred(:);
 valid = ~isnan(yTrue) & ~isnan(yPred);
@@ -186,7 +195,7 @@ yPred = yPred(valid);
 err = yTrue - yPred;
 metrics.RMSE = sqrt(mean(err .^ 2));
 metrics.MAE = mean(abs(err));
-metrics.MAPE = mean(abs(err ./ max(abs(yTrue), eps))) * 100;
+metrics.MAPE = mean(abs(err ./ max(abs(yTrue), cfg.mapeMinLoadKw))) * 100;
 metrics.R2 = 1 - sum(err .^ 2) / sum((yTrue - mean(yTrue)) .^ 2);
 end
 
