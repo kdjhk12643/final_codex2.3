@@ -1,4 +1,7 @@
 clear; clc; close all;
+set(groot, "defaultTextInterpreter", "none");
+set(groot, "defaultLegendInterpreter", "none");
+set(groot, "defaultAxesTickLabelInterpreter", "none");
 
 cfg = config();
 totalTimer = tic;
