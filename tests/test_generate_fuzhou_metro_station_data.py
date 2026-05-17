@@ -12,15 +12,29 @@ def load_generator_module():
     return module
 
 
-def test_generates_full_july_2025_quarter_hour_dataset():
+def test_generates_full_2025_quarter_hour_dataset():
     generator = load_generator_module()
 
     data = generator.generate_station_data(seed=202507)
 
-    assert len(data) == 31 * 24 * 4
-    assert str(data["timestamp"].iloc[0]) == "2025-07-01 00:00:00"
-    assert str(data["timestamp"].iloc[-1]) == "2025-07-31 23:45:00"
+    assert len(data) == 365 * 24 * 4
+    assert str(data["timestamp"].iloc[0]) == "2025-01-01 00:00:00"
+    assert str(data["timestamp"].iloc[-1]) == "2025-12-31 23:45:00"
     assert data["timestamp"].diff().dropna().dt.total_seconds().eq(15 * 60).all()
+    assert generator.DEFAULT_OUTPUT == Path("data/fuzhou_metro_dongjiekou_2025.csv")
+
+
+def test_full_year_dataset_contains_seasonal_load_structure():
+    generator = load_generator_module()
+
+    data = generator.generate_station_data(seed=202507, missing_rate=0)
+
+    assert "season" in data.columns
+    assert set(data["season"]) == {"winter", "transition", "summer"}
+
+    monthly_load = data.groupby(data["timestamp"].dt.month)["total_cooling_load_kw"].mean()
+    assert monthly_load.loc[7] > monthly_load.loc[4] * 1.25
+    assert monthly_load.loc[7] > monthly_load.loc[1] * 1.45
 
 
 def test_dataset_contains_research_features_and_load_balance():

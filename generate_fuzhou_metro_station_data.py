@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 
-DEFAULT_OUTPUT = Path("data/fuzhou_metro_dongjiekou_2025_07.csv")
+DEFAULT_OUTPUT = Path("data/fuzhou_metro_dongjiekou_2025.csv")
 
 
 def classify_time_slot(hour: int) -> str:
@@ -32,6 +32,17 @@ def classify_day_type(day_index: np.ndarray, day_of_week: np.ndarray) -> np.ndar
         ],
         ["weekend_single", "weekday_high", "low_flow"],
         default="weekday_medium",
+    )
+
+
+def classify_season(month: np.ndarray) -> np.ndarray:
+    return np.select(
+        [
+            np.isin(month, [6, 7, 8, 9]),
+            np.isin(month, [12, 1, 2]),
+        ],
+        ["summer", "winter"],
+        default="transition",
     )
 
 
@@ -97,7 +108,7 @@ def generate_station_data(
     missing_rate: float = 0.006,
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
-    timestamps = pd.date_range("2025-07-01 00:00:00", "2025-07-31 23:45:00", freq="15min")
+    timestamps = pd.date_range("2025-01-01 00:00:00", "2025-12-31 23:45:00", freq="15min")
     data = pd.DataFrame({"timestamp": timestamps})
 
     data["station"] = station
@@ -107,16 +118,27 @@ def generate_station_data(
     data["time_slot"] = data["hour"].map(classify_time_slot)
 
     hour_float = data["timestamp"].dt.hour.to_numpy() + data["timestamp"].dt.minute.to_numpy() / 60
-    day_index = data["timestamp"].dt.day.to_numpy()
+    day_index = data["timestamp"].dt.dayofyear.to_numpy()
+    day_of_month = data["timestamp"].dt.day.to_numpy()
+    month = data["timestamp"].dt.month.to_numpy()
     day_of_week = data["timestamp"].dt.dayofweek.to_numpy()
     day_type = classify_day_type(day_index, day_of_week)
+    season = classify_season(month)
     data["day_type"] = day_type
+    data["season"] = season
 
     entry_base, exit_base = flow_profile(hour_float, day_type)
     daily_factor = 1.0 + 0.035 * np.sin(2 * np.pi * (day_index - 1) / 7)
+    season_flow_factor = np.select(
+        [season == "summer", season == "transition", season == "winter"],
+        [1.10, 0.95, 0.82],
+        default=1.0,
+    )
     event_factor = np.where(day_type == "weekday_high", 1.05, 1.0)
     entry_flow = rng.normal(entry_base * daily_factor * event_factor, 18).clip(0)
     exit_flow = rng.normal(exit_base * daily_factor * event_factor, 18).clip(0)
+    entry_flow = entry_flow * season_flow_factor
+    exit_flow = exit_flow * season_flow_factor
 
     data["entry_flow"] = np.rint(entry_flow).astype(int)
     data["exit_flow"] = np.rint(exit_flow).astype(int)
@@ -128,15 +150,16 @@ def generate_station_data(
     )
     data["platform_passengers"] = np.rint((rolling_people * stay_ratio).clip(3)).astype(int)
 
-    base_temp = np.select(
+    annual_temp = 24.2 + 8.7 * np.sin(2 * np.pi * (day_index - 105) / 365)
+    day_type_temp = np.select(
         [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
-        [31.2, 30.5, 30.9],
-        default=29.2,
+        [0.9, 0.3, 0.6],
+        default=-0.6,
     )
-    diurnal_temp = base_temp + 4.3 * np.sin(2 * np.pi * (hour_float - 8) / 24)
-    synoptic_temp = 0.8 * np.sin(2 * np.pi * (day_index - 3) / 9)
+    diurnal_temp = annual_temp + day_type_temp + 4.1 * np.sin(2 * np.pi * (hour_float - 8) / 24)
+    synoptic_temp = 1.1 * np.sin(2 * np.pi * (day_index - 3) / 11)
     outdoor_temp = rng.normal(diurnal_temp + synoptic_temp, 0.55)
-    outdoor_rh = rng.normal(76 - 8 * np.sin(2 * np.pi * (hour_float - 9) / 24), 3.0).clip(55, 96)
+    outdoor_rh = rng.normal(75 - 7 * np.sin(2 * np.pi * (hour_float - 9) / 24) + 4 * (season == "summer"), 3.0).clip(50, 98)
     daylight = np.sin(np.pi * (hour_float - 6) / 13).clip(0)
     solar_radiation = rng.normal(650 * daylight, 35).clip(0)
 
@@ -180,12 +203,17 @@ def generate_station_data(
         [1.13, 1.00, 1.04],
         default=0.82,
     )
+    season_load_factor = np.select(
+        [season == "summer", season == "transition", season == "winter"],
+        [1.04, 0.98, 0.90],
+        default=1.0,
+    )
     latent_internal = type_load_factor * (
         1.02
         + 0.12 * np.sin(2 * np.pi * (hour_float - 6) / 24)
-        + 0.055 * np.cos(2 * np.pi * day_index / 11)
+        + 0.055 * np.cos(2 * np.pi * day_of_month / 11)
     )
-    total_load = (people_load + fresh_air_load + envelope_load + equipment_load) * latent_internal * operation_shape
+    total_load = (people_load + fresh_air_load + envelope_load + equipment_load) * latent_internal * operation_shape * season_load_factor
     total_load = total_load + rng.normal(0, 10.0, len(data))
 
     load_change = pd.Series(total_load).diff().fillna(0).to_numpy()
@@ -210,7 +238,7 @@ def generate_station_data(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate synthetic July 2025 Fuzhou Metro station data for HVAC load research."
+        description="Generate synthetic full-year 2025 Fuzhou Metro station data for HVAC load research."
     )
     parser.add_argument("--station", default="Dongjiekou Station", help="Station name.")
     parser.add_argument("--line", default="Fuzhou Metro Line 1/Line 4 Interchange", help="Metro line description.")

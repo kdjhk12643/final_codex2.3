@@ -34,7 +34,7 @@ analysisResult = step2_analysis_cluster(cfg, dataClean, featureData);
 fprintf("[2/4] Influence analysis and clustering finished.\n\n");
 
 fprintf("[3/4] Load prediction started.\n");
-predictionResult = step3_load_prediction(cfg, featureData, analysisResult);
+predictionResult = step3_load_prediction(cfg, featureData, dataClean, analysisResult);
 fprintf("[3/4] Load prediction finished.\n\n");
 
 fprintf("[4/4] Capacity optimization started.\n");

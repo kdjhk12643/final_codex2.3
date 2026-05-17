@@ -83,7 +83,22 @@ end
 
 function saveFigureIfNeeded(cfg, fig, fileName)
 if cfg.saveFigures
-    exportgraphics(fig, fullfile(cfg.figureDir, fileName), "Resolution", 300);
+    ensureFigureDir(cfg);
+    filePath = fullfile(cfg.figureDir, fileName);
+    if isfile(filePath)
+        delete(filePath);
+    end
+    try
+        exportgraphics(fig, filePath, "Resolution", 300);
+    catch
+        saveas(fig, filePath);
+    end
+end
+end
+
+function ensureFigureDir(cfg)
+if ~exist(cfg.figureDir, "dir")
+    mkdir(cfg.figureDir);
 end
 end
 

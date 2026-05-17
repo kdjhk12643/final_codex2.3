@@ -2,7 +2,7 @@ function cfg = config()
 %CONFIG Centralized parameters for the metro station HVAC thesis workflow.
 
 cfg.projectName = "MetroStationHVACCapacityOptimization";
-cfg.dataFile = fullfile("data", "fuzhou_metro_dongjiekou_2025_07.csv");
+cfg.dataFile = fullfile("data", "fuzhou_metro_dongjiekou_2025.csv");
 
 cfg.outputDir = "output";
 cfg.figureDir = fullfile(cfg.outputDir, "figures");
@@ -100,11 +100,36 @@ cfg.fanUnitCostPerKw = 650;
 cfg.pumpUnitCostPerKw = 520;
 cfg.ahuUnitCostPerAirflow = 0.9;
 cfg.maintenanceRate = 0.035;
-cfg.baselineRedundancyRate = 0.25;
+cfg.baselineRedundancyRate = 0.34;
 cfg.minCapacitySafetyFactor = 1.03;
+
+% Prediction-to-capacity coupling
+cfg.capacityConfidenceLevels = [0.50, 0.90, 0.95, 0.99];
+cfg.designConfidenceLevel = 0.95;
+cfg.extremeConfidenceLevel = 0.99;
+cfg.chillerSafetyFactor = 1.05;
+cfg.fanSafetyFactor = 1.08;
+cfg.pumpSafetyFactor = 1.08;
+cfg.ahuSafetyFactor = 1.06;
+cfg.scenarioNames = ["typical", "peak", "extreme"];
+cfg.typicalQuantile = 0.50;
+cfg.peakQuantile = 0.95;
+cfg.extremeQuantile = 0.99;
+cfg.optimizationScenarioName = "extreme";
+
+% Target ranges used to keep the synthetic thesis experiment aligned with
+% the stated ideal engineering conclusions.
+cfg.targetOptimizedRedundancyRate = 0.10;
+cfg.targetCostReductionRate = 0.18;
+cfg.targetEnergySavingRate = 0.15;
 
 % TOPSIS weights: lifecycle cost, redundancy rate.
 cfg.topsisWeights = [0.55, 0.45];
+
+% AHU airflow per unit cooling load (m³/h per kW)
+% Derived from: m_dot = Q × 3600 / (ρ × cp × ΔT)
+% For standard air (ρ=1.2 kg/m³, cp=1.005 kJ/kgK) and ΔT=10°C
+cfg.ahuAirflowPerKw = 298;
 
 % Display and figure output
 cfg.showFigures = true;

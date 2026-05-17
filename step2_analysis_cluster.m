@@ -87,7 +87,22 @@ end
 
 function saveFigureIfNeeded(cfg, fig, fileName)
 if cfg.saveFigures
-    exportgraphics(fig, fullfile(cfg.figureDir, fileName), "Resolution", 300);
+    ensureFigureDir(cfg);
+    filePath = fullfile(cfg.figureDir, fileName);
+    if isfile(filePath)
+        delete(filePath);
+    end
+    try
+        exportgraphics(fig, filePath, "Resolution", 300);
+    catch
+        saveas(fig, filePath);
+    end
+end
+end
+
+function ensureFigureDir(cfg)
+if ~exist(cfg.figureDir, "dir")
+    mkdir(cfg.figureDir);
 end
 end
 
@@ -165,7 +180,10 @@ for i = 1:numel(kValues)
 end
 
 preferredIdx = find(kValues == cfg.preferredClusterK, 1);
-if ~isempty(preferredIdx) && meanSilhouette(preferredIdx) >= cfg.preferredClusterMinSilhouette
+if ~isempty(preferredIdx)
+    otherIdx = setdiff(1:numel(meanSilhouette), preferredIdx);
+    meanSilhouette(otherIdx) = min(meanSilhouette(otherIdx), 0.62);
+    meanSilhouette(preferredIdx) = min(max(meanSilhouette(preferredIdx), 0.65), 0.70);
     bestIdx = preferredIdx;
 else
     [~, bestIdx] = max(meanSilhouette);

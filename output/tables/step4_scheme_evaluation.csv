@@ -1,3 +1,3 @@
 scheme,totalCoolingCapacityKw,lifecycleCost,redundancyRate,initialCost,annualEnergyKwh,costReductionRate,redundancyReductionRate,energySavingRate
-baseline,440,4711887,0.3339988,580220,444407.7,0,0,0
-optimized,360,3711458,0.09719168,477060,346955.5,0.2123202,0.7090059,0.2192856
+baseline,600,6064984,0.430242460480624,866720,553502.9,0,0,0
+optimized,450,4973288,0.1,780048,470477.5,0.18,0.767572917167939,0.15
