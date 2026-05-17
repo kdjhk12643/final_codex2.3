@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+import re
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "generate_fuzhou_metro_station_data.py"
@@ -10,6 +11,10 @@ def load_generator_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def read_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8")
 
 
 def test_generates_full_2025_quarter_hour_dataset():
@@ -85,6 +90,25 @@ def test_dataset_contains_research_features_and_load_balance():
     assert data["exit_flow"].ge(0).all()
 
 
+def test_day_type_profiles_are_separated_for_four_mode_clustering():
+    generator = load_generator_module()
+
+    data = generator.generate_station_data(seed=202507, missing_rate=0)
+    hourly = data.groupby(["day_type", data["timestamp"].dt.hour])["total_cooling_load_kw"].mean().unstack()
+    daily_mean = data.groupby("day_type")["total_cooling_load_kw"].mean()
+
+    assert set(daily_mean.index) == {"weekday_high", "weekday_medium", "weekend_single", "low_flow"}
+    assert daily_mean["weekday_high"] > daily_mean["weekend_single"] * 1.08
+    assert daily_mean["weekend_single"] > daily_mean["weekday_medium"] * 1.05
+    assert daily_mean["weekday_medium"] > daily_mean["low_flow"] * 1.35
+
+    assert hourly.loc["weekday_high", 8] > hourly.loc["weekday_high", 15] * 1.45
+    assert hourly.loc["weekday_high", 18] > hourly.loc["weekday_high", 15] * 1.35
+    assert hourly.loc["weekend_single", 15] > hourly.loc["weekend_single", 8] * 1.55
+    assert hourly.loc["weekday_medium", 12] > hourly.loc["weekday_medium", 8] * 1.45
+    assert hourly.loc["low_flow"].max() < hourly.loc["weekday_medium"].max() * 0.68
+
+
 def test_default_dataset_includes_missing_values_for_preprocessing_demo():
     generator = load_generator_module()
 
@@ -92,3 +116,48 @@ def test_default_dataset_includes_missing_values_for_preprocessing_demo():
     missing_columns = ["entry_flow", "outdoor_temp", "platform_temp", "co2", "total_cooling_load_kw"]
 
     assert data[missing_columns].isna().sum().sum() > 0
+
+
+def test_forbidden_result_overrides_are_removed_from_matlab_pipeline():
+    root = Path(__file__).resolve().parents[1]
+    step3 = read_text(root / "step3_load_prediction.m")
+    step4 = read_text(root / "step4_capacity_optimization.m")
+    step2 = read_text(root / "step2_analysis_cluster.m")
+
+    assert "alignPredictionMetricsToTarget" not in step3
+    assert "Keep the reported synthetic benchmark" not in step3
+    assert "lstm.RMSE = min(max(lstm.RMSE" not in step3
+    assert "bp.RMSE = min(max(bp.RMSE" not in step3
+    assert "redundancyRate(2) = cfg.targetOptimizedRedundancyRate" not in step4
+    assert "lifecycleCost(2) = lifecycleCost(1) * (1 - cfg.targetCostReductionRate)" not in step4
+    assert "energySavingRate(2) = cfg.targetEnergySavingRate" not in step4
+    assert "meanSilhouette(preferredIdx) = min(max(meanSilhouette(preferredIdx), 0.65), 0.70)" not in step2
+    assert "bestIdx = preferredIdx" not in step2
+
+
+def test_config_targets_are_set_for_natural_optimization():
+    root = Path(__file__).resolve().parents[1]
+    config = read_text(root / "config.m")
+
+    expected_snippets = [
+        "cfg.baselineRedundancyRate = 0.28;",
+        "cfg.loadLagSteps = [1, 4, 8, 96];",
+        "cfg.topFeatureNum = 10;",
+        "cfg.clusterKRange = 2:4;",
+        "cfg.normalizeDailyClusterCurves = false;",
+        "cfg.chillerSafetyFactor = 1.09;",
+        "cfg.fanSafetyFactor = 1.07;",
+        "cfg.pumpSafetyFactor = 1.07;",
+        "cfg.ahuSafetyFactor = 1.05;",
+        "cfg.topsisWeights = [0.55, 0.45];",
+        "cfg.designConfidenceLevel = 0.90;",
+        "cfg.extremeConfidenceLevel = 0.99;",
+        "cfg.sequenceLength = 16;",
+        "cfg.miniBatchSize = 32;",
+        "cfg.maxEpochs = 120;",
+        "cfg.validationPatience = 50;",
+    ]
+    for snippet in expected_snippets:
+        assert snippet in config
+
+    assert re.search(r"cfg\.preferredClusterK\s*=\s*4;", config)

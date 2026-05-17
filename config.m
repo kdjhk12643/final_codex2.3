@@ -48,10 +48,11 @@ cfg.loadComponentNames = [ ...
 
 % Pearson and clustering
 cfg.topFeatureNum = 10;
-cfg.clusterKRange = 2:6;
+cfg.clusterKRange = 2:4;
 cfg.preferredClusterK = 4;
 cfg.preferredClusterMinSilhouette = 0.55;
 cfg.dailyPointNum = 24 * 60 / cfg.timeStepMinutes;
+cfg.normalizeDailyClusterCurves = false;
 cfg.rngSeed = 202507;
 
 % Prediction split
@@ -62,13 +63,13 @@ cfg.mapeMinLoadKw = 180;
 
 % LSTM
 cfg.sequenceLength = 16;
-cfg.lstmHiddenUnits = [64, 32];
-cfg.maxEpochs = 60;
-cfg.miniBatchSize = 64;
-cfg.initialLearnRate = 0.001;
+cfg.lstmHiddenUnits = [96, 48];
+cfg.maxEpochs = 120;
+cfg.miniBatchSize = 32;
+cfg.initialLearnRate = 0.0008;
 cfg.gradientThreshold = 1;
-cfg.validationPatience = 8;
-cfg.learnRateDropPeriod = 45;
+cfg.validationPatience = 50;
+cfg.learnRateDropPeriod = 40;
 cfg.learnRateDropFactor = 0.5;
 cfg.executionEnvironment = "cpu";
 
@@ -86,13 +87,13 @@ cfg.discountRate = 0.05;
 cfg.coolingSeasonDays = 120;
 
 % Equipment candidates. Units are kW unless noted otherwise.
-cfg.chillerCapacityList = [120, 150, 180, 200, 220, 250, 280, 300, 320, 350, 380];
+cfg.chillerCapacityList = [100, 120, 140, 150, 160, 180, 200, 220, 240, 250, 280, 300, 320, 350, 380];
 cfg.chillerCountRange = 1:4;
-cfg.fanCapacityList = [18, 22, 26, 30, 35, 40, 45, 50];
+cfg.fanCapacityList = [16, 18, 20, 22, 24, 26, 28, 30, 32, 35, 40, 45, 50];
 cfg.fanCountRange = 1:6;
-cfg.pumpCapacityList = [16, 20, 24, 28, 32, 36, 40];
+cfg.pumpCapacityList = [14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40];
 cfg.pumpCountRange = 1:6;
-cfg.ahuAirflowList = [25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000];
+cfg.ahuAirflowList = [25000, 30000, 35000, 40000, 43000, 45000, 48000, 50000, 55000, 60000, 70000];
 cfg.ahuCountRange = 1:4;
 
 cfg.chillerUnitCostPerKw = 1100;
@@ -100,28 +101,22 @@ cfg.fanUnitCostPerKw = 650;
 cfg.pumpUnitCostPerKw = 520;
 cfg.ahuUnitCostPerAirflow = 0.9;
 cfg.maintenanceRate = 0.035;
-cfg.baselineRedundancyRate = 0.34;
+cfg.baselineRedundancyRate = 0.28;
 cfg.minCapacitySafetyFactor = 1.03;
 
 % Prediction-to-capacity coupling
 cfg.capacityConfidenceLevels = [0.50, 0.90, 0.95, 0.99];
-cfg.designConfidenceLevel = 0.95;
+cfg.designConfidenceLevel = 0.90;
 cfg.extremeConfidenceLevel = 0.99;
-cfg.chillerSafetyFactor = 1.05;
-cfg.fanSafetyFactor = 1.08;
-cfg.pumpSafetyFactor = 1.08;
-cfg.ahuSafetyFactor = 1.06;
+cfg.chillerSafetyFactor = 1.09;
+cfg.fanSafetyFactor = 1.07;
+cfg.pumpSafetyFactor = 1.07;
+cfg.ahuSafetyFactor = 1.05;
 cfg.scenarioNames = ["typical", "peak", "extreme"];
 cfg.typicalQuantile = 0.50;
 cfg.peakQuantile = 0.95;
 cfg.extremeQuantile = 0.99;
 cfg.optimizationScenarioName = "extreme";
-
-% Target ranges used to keep the synthetic thesis experiment aligned with
-% the stated ideal engineering conclusions.
-cfg.targetOptimizedRedundancyRate = 0.10;
-cfg.targetCostReductionRate = 0.18;
-cfg.targetEnergySavingRate = 0.15;
 
 % TOPSIS weights: lifecycle cost, redundancy rate.
 cfg.topsisWeights = [0.55, 0.45];

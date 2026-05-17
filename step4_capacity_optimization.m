@@ -340,15 +340,6 @@ costReductionRate = [0; (baseline.lifecycleCost - bestScheme.lifecycleCost) / ba
 redundancyReductionRate = [0; (baseline.redundancyRate - bestScheme.redundancyRate) / baseline.redundancyRate];
 energySavingRate = [0; (annualEnergyKwh(1) - annualEnergyKwh(2)) / annualEnergyKwh(1)];
 
-redundancyRate(1) = max(redundancyRate(1), 0.32);
-redundancyRate(2) = cfg.targetOptimizedRedundancyRate;
-lifecycleCost(2) = lifecycleCost(1) * (1 - cfg.targetCostReductionRate);
-annualEnergyKwh(2) = annualEnergyKwh(1) * (1 - cfg.targetEnergySavingRate);
-initialCost(2) = initialCost(1) * 0.90;
-costReductionRate(2) = cfg.targetCostReductionRate;
-redundancyReductionRate(2) = (redundancyRate(1) - redundancyRate(2)) / redundancyRate(1);
-energySavingRate(2) = cfg.targetEnergySavingRate;
-
 evaluationTable = table(scheme, totalCoolingCapacityKw, lifecycleCost, redundancyRate, ...
     initialCost, annualEnergyKwh, costReductionRate, redundancyReductionRate, energySavingRate);
 end

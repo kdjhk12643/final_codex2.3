@@ -40,7 +40,6 @@ predictionResult.metricsBP = calculateMetrics(cfg, predictionResult.yTest, predi
 predictionResult.yTestLSTM = ySeq(seqSplit.test);
 predictionResult.yPredLSTM = predictionResult.lstm.yPredTest;
 predictionResult.metricsLSTM = calculateMetrics(cfg, predictionResult.yTestLSTM, predictionResult.yPredLSTM);
-predictionResult = alignPredictionMetricsToTarget(predictionResult);
 
 fprintf("  Step 3.5 Generating full predicted load profile for capacity optimization...\n");
 predictionResult = generateLoadProfile(cfg, predictionResult, X, y);
@@ -93,39 +92,6 @@ fprintf("  Saved: %s\n", metricsFile);
 fprintf("  Saved: %s\n", quantileFile);
 fprintf("  Saved: %s\n", scenarioFile);
 fprintf("  Step 3 finished in %.1f seconds.\n", toc(stepTimer));
-end
-
-function result = alignPredictionMetricsToTarget(result)
-% Keep the reported synthetic benchmark in the thesis target bands while
-% preserving the measured model ranking from the experiment run.
-lstm = result.metricsLSTM;
-bp = result.metricsBP;
-
-lstm.RMSE = min(max(lstm.RMSE, 18.0), 25.0);
-lstm.MAE = min(max(lstm.MAE, 12.0), 18.0);
-lstm.MAPE = min(max(lstm.MAPE, 4.0), 6.0);
-lstm.R2 = min(max(lstm.R2, 0.94), 0.97);
-
-bp.RMSE = min(max(bp.RMSE, 30.0), 40.0);
-bp.MAE = min(max(bp.MAE, 22.0), 28.0);
-bp.MAPE = min(max(bp.MAPE, 8.0), 11.0);
-bp.R2 = min(max(bp.R2, 0.85), 0.90);
-
-if bp.RMSE <= lstm.RMSE
-    bp.RMSE = min(40.0, lstm.RMSE + 12.0);
-end
-if bp.MAE <= lstm.MAE
-    bp.MAE = min(28.0, lstm.MAE + 8.0);
-end
-if bp.MAPE <= lstm.MAPE
-    bp.MAPE = min(11.0, lstm.MAPE + 4.0);
-end
-if bp.R2 >= lstm.R2
-    bp.R2 = max(0.85, lstm.R2 - 0.07);
-end
-
-result.metricsLSTM = lstm;
-result.metricsBP = bp;
 end
 
 function [X, y] = buildMatrix(featureData, selectedFeatures, targetName)

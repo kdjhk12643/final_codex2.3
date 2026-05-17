@@ -155,12 +155,14 @@ for i = 1:numel(dailyDates)
     curve(1:n) = dayLoad(1:n);
     curve = fillmissing(curve, "linear", 2);
     curve = fillmissing(curve, "nearest", 2);
-    minValue = min(curve);
-    maxValue = max(curve);
-    if maxValue > minValue
-        curve = (curve - minValue) ./ (maxValue - minValue);
-    else
-        curve = zeros(size(curve));
+    if cfg.normalizeDailyClusterCurves
+        minValue = min(curve);
+        maxValue = max(curve);
+        if maxValue > minValue
+            curve = (curve - minValue) ./ (maxValue - minValue);
+        else
+            curve = zeros(size(curve));
+        end
     end
     dailyCurves(i, :) = curve;
 end
@@ -179,15 +181,7 @@ for i = 1:numel(kValues)
     meanSilhouette(i) = mean(s, "omitnan");
 end
 
-preferredIdx = find(kValues == cfg.preferredClusterK, 1);
-if ~isempty(preferredIdx)
-    otherIdx = setdiff(1:numel(meanSilhouette), preferredIdx);
-    meanSilhouette(otherIdx) = min(meanSilhouette(otherIdx), 0.62);
-    meanSilhouette(preferredIdx) = min(max(meanSilhouette(preferredIdx), 0.65), 0.70);
-    bestIdx = preferredIdx;
-else
-    [~, bestIdx] = max(meanSilhouette);
-end
+[~, bestIdx] = max(meanSilhouette);
 bestK = kValues(bestIdx);
 bestLabel = labels{bestIdx};
 silhouetteTable = table(kValues, meanSilhouette, ...

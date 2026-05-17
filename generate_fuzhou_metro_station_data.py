@@ -54,17 +54,17 @@ def flow_profile(hour_float: np.ndarray, day_type: np.ndarray) -> tuple[np.ndarr
     daytime_plateau = 1 / (1 + np.exp(-(hour_float - 9.5) * 2.0)) * 1 / (1 + np.exp((hour_float - 17.0) * 2.0))
     low_day = np.exp(-0.5 * ((hour_float - 13.5) / 5.5) ** 2)
 
-    high_entry = 30 + 620 * morning_peak + 420 * evening_peak + 125 * noon
-    high_exit = 26 + 360 * morning_peak + 660 * evening_peak + 115 * noon
+    high_entry = 36 + 760 * morning_peak + 500 * evening_peak + 95 * noon
+    high_exit = 32 + 430 * morning_peak + 810 * evening_peak + 90 * noon
 
-    medium_entry = 30 + 250 * daytime_plateau + 95 * noon
-    medium_exit = 28 + 230 * daytime_plateau + 90 * noon
+    medium_entry = 28 + 210 * daytime_plateau + 155 * noon
+    medium_exit = 26 + 195 * daytime_plateau + 145 * noon
 
-    weekend_entry = 34 + 110 * morning_peak + 390 * weekend_leisure + 160 * noon
-    weekend_exit = 32 + 95 * morning_peak + 370 * weekend_leisure + 150 * noon
+    weekend_entry = 30 + 70 * morning_peak + 420 * weekend_leisure + 120 * noon
+    weekend_exit = 28 + 60 * morning_peak + 395 * weekend_leisure + 110 * noon
 
-    low_entry = 18 + 75 * low_day + 35 * noon
-    low_exit = 16 + 70 * low_day + 30 * noon
+    low_entry = 14 + 48 * low_day + 20 * noon
+    low_exit = 13 + 44 * low_day + 18 * noon
 
     entry = np.select(
         [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
@@ -131,7 +131,7 @@ def generate_station_data(
     daily_factor = 1.0 + 0.035 * np.sin(2 * np.pi * (day_index - 1) / 7)
     season_flow_factor = np.select(
         [season == "summer", season == "transition", season == "winter"],
-        [1.10, 0.95, 0.82],
+        [1.04, 1.00, 0.96],
         default=1.0,
     )
     event_factor = np.where(day_type == "weekday_high", 1.05, 1.0)
@@ -150,7 +150,7 @@ def generate_station_data(
     )
     data["platform_passengers"] = np.rint((rolling_people * stay_ratio).clip(3)).astype(int)
 
-    annual_temp = 24.2 + 8.7 * np.sin(2 * np.pi * (day_index - 105) / 365)
+    annual_temp = 24.2 + 7.2 * np.sin(2 * np.pi * (day_index - 105) / 365)
     day_type_temp = np.select(
         [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
         [0.9, 0.3, 0.6],
@@ -178,34 +178,40 @@ def generate_station_data(
     data["platform_rh"] = rng.normal(platform_rh, 1.3).clip(50, 82).round(2)
     data["co2"] = co2.clip(420, 1350).round(1)
 
+    hvac_operation_factor = np.select(
+        [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
+        [1.30, 0.95, 1.08],
+        default=0.62,
+    )
     people_load = 0.105 * data["platform_passengers"].to_numpy()
     fresh_air_load = (7.8 + 0.105 * data["entry_flow"].to_numpy()) * np.maximum(outdoor_temp - 24, 0) / 10
-    envelope_load = 72 + 4.6 * np.maximum(outdoor_temp - 28, 0) + 0.014 * solar_radiation
-    equipment_load = 48 + 0.012 * (data["entry_flow"].to_numpy() + data["exit_flow"].to_numpy())
+    envelope_load = (72 + 4.6 * np.maximum(outdoor_temp - 28, 0) + 0.014 * solar_radiation) * hvac_operation_factor
+    equipment_load = (48 + 0.012 * (data["entry_flow"].to_numpy() + data["exit_flow"].to_numpy())) * hvac_operation_factor
 
     morning_peak = np.exp(-0.5 * ((hour_float - 8.0) / 0.82) ** 2)
     evening_peak = np.exp(-0.5 * ((hour_float - 18.0) / 0.92) ** 2)
+    noon = np.exp(-0.5 * ((hour_float - 12.5) / 2.0) ** 2)
     daytime_plateau = 1 / (1 + np.exp(-(hour_float - 9.5) * 2.0)) * 1 / (1 + np.exp((hour_float - 17.0) * 2.0))
     weekend_leisure = np.exp(-0.5 * ((hour_float - 15.0) / 3.1) ** 2)
     low_day = np.exp(-0.5 * ((hour_float - 13.5) / 5.5) ** 2)
     operation_shape = np.select(
         [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
         [
-            0.90 + 0.30 * morning_peak + 0.30 * evening_peak,
-            0.88 + 0.24 * daytime_plateau,
-            0.88 + 0.34 * weekend_leisure,
+            1.00 + 0.18 * morning_peak + 0.17 * evening_peak,
+            0.94 + 0.11 * daytime_plateau + 0.08 * noon,
+            0.94 + 0.18 * weekend_leisure + 0.06 * noon,
         ],
-        default=0.86 + 0.06 * low_day,
+        default=0.90 + 0.04 * low_day,
     )
 
     type_load_factor = np.select(
         [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
-        [1.13, 1.00, 1.04],
-        default=0.82,
+        [1.08, 0.99, 1.02],
+        default=0.93,
     )
     season_load_factor = np.select(
         [season == "summer", season == "transition", season == "winter"],
-        [1.04, 0.98, 0.90],
+        [1.04, 1.00, 0.96],
         default=1.0,
     )
     latent_internal = type_load_factor * (
@@ -214,7 +220,7 @@ def generate_station_data(
         + 0.055 * np.cos(2 * np.pi * day_of_month / 11)
     )
     total_load = (people_load + fresh_air_load + envelope_load + equipment_load) * latent_internal * operation_shape * season_load_factor
-    total_load = total_load + rng.normal(0, 10.0, len(data))
+    total_load = total_load + rng.normal(0, 7.0, len(data))
 
     load_change = pd.Series(total_load).diff().fillna(0).to_numpy()
     control_load = pd.Series(total_load).rolling(4, min_periods=1).mean().shift(1, fill_value=total_load[0]).to_numpy()
