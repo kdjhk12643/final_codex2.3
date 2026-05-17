@@ -41,6 +41,9 @@ predictionResult.yTestLSTM = ySeq(seqSplit.test);
 predictionResult.yPredLSTM = predictionResult.lstm.yPredTest;
 predictionResult.metricsLSTM = calculateMetrics(cfg, predictionResult.yTestLSTM, predictionResult.yPredLSTM);
 
+fprintf("  Step 3.5 Generating full predicted load profile for capacity optimization...\n");
+predictionResult = generateLoadProfile(cfg, predictionResult, X, y);
+
 predictionResult.metrics = table( ...
     ["LSTM"; "BP"], ...
     [predictionResult.metricsLSTM.RMSE; predictionResult.metricsBP.RMSE], ...
@@ -49,7 +52,6 @@ predictionResult.metrics = table( ...
     [predictionResult.metricsLSTM.R2; predictionResult.metricsBP.R2], ...
     'VariableNames', {'model', 'RMSE', 'MAE', 'MAPE', 'R2'});
 
-predictionResult.futureLoad = predictionResult.yPredLSTM;
 metricsFile = fullfile(cfg.tableDir, "step3_prediction_metrics.csv");
 writetable(predictionResult.metrics, metricsFile);
 
@@ -197,6 +199,24 @@ metrics.RMSE = sqrt(mean(err .^ 2));
 metrics.MAE = mean(abs(err));
 metrics.MAPE = mean(abs(err ./ max(abs(yTrue), cfg.mapeMinLoadKw))) * 100;
 metrics.R2 = 1 - sum(err .^ 2) / sum((yTrue - mean(yTrue)) .^ 2);
+end
+
+function result = generateLoadProfile(cfg, result, X, y)
+if strcmp(result.lstm.model, "fallback_moving_average")
+    fullPrediction = result.yPredLSTM;
+    fprintf("    Warning: LSTM model unavailable, using test-set predictions only.\n");
+else
+    [XSeqFull, ~] = buildSequences(X, y, cfg.sequenceLength);
+    yPredNorm = predict(result.lstm.model, XSeqFull, "MiniBatchSize", cfg.miniBatchSize);
+    fullPrediction = yPredNorm * result.lstm.targetStd + result.lstm.targetMean;
+end
+
+result.predictedProfile = fullPrediction(:);
+result.designLoadKw = max(fullPrediction, [], "omitnan");
+result.representativeLoadKw = mean(fullPrediction, "omitnan");
+
+fprintf("    Predicted profile: %d samples, design=%.2f kW, representative=%.2f kW.\n", ...
+    numel(fullPrediction), result.designLoadKw, result.representativeLoadKw);
 end
 
 function plotStep3Figures(cfg, predictionResult)

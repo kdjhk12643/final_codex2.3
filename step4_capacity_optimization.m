@@ -2,21 +2,15 @@ function optimizationResult = step4_capacity_optimization(cfg, predictionResult,
 %STEP4_CAPACITY_OPTIMIZATION Optimize capacity with NSGA-II and TOPSIS.
 
 stepTimer = tic;
-fprintf("  Step 4.1 Preparing design load from predicted and observed test loads...\n");
-loadDemand = [
-    predictionResult.futureLoad(:);
-    predictionResult.yTest(:);
-    predictionResult.yTestLSTM(:)
-];
-loadDemand = loadDemand(~isnan(loadDemand));
-if isempty(loadDemand)
-    error("No valid load demand data is available for capacity optimization.");
-end
-designLoad = max(loadDemand, [], "omitnan");
-fprintf("  Design load = %.2f kW, load samples for optimization = %d.\n", designLoad, numel(loadDemand));
+fprintf("  Step 4.1 Loading design load from LSTM full prediction...\n");
+designLoad = predictionResult.designLoadKw;
+representativeLoad = predictionResult.representativeLoadKw;
+fprintf("  Design load = %.2f kW (from LSTM full prediction).\n", designLoad);
+fprintf("  Representative load = %.2f kW (mean of predicted profile).\n", representativeLoad);
 
 optimizationResult = struct();
 optimizationResult.designLoadKw = designLoad;
+optimizationResult.representativeLoadKw = representativeLoad;
 fprintf("  Step 4.2 Building baseline scheme...\n");
 optimizationResult.baselineScheme = buildBaselineScheme(cfg, designLoad);
 fprintf("  Baseline cooling capacity = %.2f kW, redundancy = %.2f%%.\n", ...
@@ -25,7 +19,7 @@ fprintf("  Baseline cooling capacity = %.2f kW, redundancy = %.2f%%.\n", ...
 
 fprintf("  Step 4.3 Running capacity optimization, population=%d, generations=%d...\n", ...
     cfg.populationSize, cfg.maxGenerations);
-[paretoSet, paretoObjective] = solveCapacityOptimization(cfg, designLoad, loadDemand);
+[paretoSet, paretoObjective] = solveCapacityOptimization(cfg, designLoad, representativeLoad);
 [paretoObjective, uniqueIdx] = unique(paretoObjective, "rows", "stable");
 paretoSet = paretoSet(uniqueIdx, :);
 fprintf("  Pareto solutions generated: %d.\n", size(paretoSet, 1));
@@ -37,7 +31,7 @@ optimizationResult.paretoSet = paretoSet;
 optimizationResult.paretoObjective = paretoObjective;
 optimizationResult.bestScheme = decodeScheme(cfg, bestScheme);
 optimizationResult.topsisTable = topsisTable;
-optimizationResult.evaluationTable = compareSchemes(cfg, optimizationResult.baselineScheme, optimizationResult.bestScheme, loadDemand);
+optimizationResult.evaluationTable = compareSchemes(cfg, optimizationResult.baselineScheme, optimizationResult.bestScheme, designLoad, representativeLoad);
 optimizationResult.analysisSummary = struct( ...
     "bestK", analysisResult.bestK, ...
     "selectedFeatureCount", numel(analysisResult.selectedFeatures));
@@ -105,7 +99,7 @@ for candidateCount = countRange
 end
 end
 
-function [paretoSet, paretoObjective] = solveCapacityOptimization(cfg, designLoad, loadDemand)
+function [paretoSet, paretoObjective] = solveCapacityOptimization(cfg, designLoad, representativeLoad)
 hasGamultiobj = exist("gamultiobj", "file") == 2;
 
 if hasGamultiobj
@@ -124,27 +118,27 @@ if hasGamultiobj
         "MaxGenerations", cfg.maxGenerations, ...
         "Display", "iter");
 
-    objective = @(x) capacityObjectives(cfg, round(x), designLoad, loadDemand);
+    objective = @(x) capacityObjectives(cfg, round(x), designLoad, representativeLoad);
     constraint = @(x) capacityConstraints(cfg, round(x), designLoad);
     [paretoSet, paretoObjective] = gamultiobj(objective, nvars, [], [], [], [], lb, ub, constraint, options);
     paretoSet = round(paretoSet);
-    [discreteSet, discreteObjective] = enumerateDiscretePareto(cfg, designLoad, loadDemand);
+    [discreteSet, discreteObjective] = enumerateDiscretePareto(cfg, designLoad, representativeLoad);
     paretoSet = [paretoSet; discreteSet];
     paretoObjective = [paretoObjective; discreteObjective];
 else
     fprintf("    gamultiobj not detected. Using fallback grid search.\n");
-    [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, designLoad, loadDemand);
+    [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, designLoad, representativeLoad);
 end
 end
 
-function f = capacityObjectives(cfg, x, designLoad, loadDemand)
+function f = capacityObjectives(cfg, x, designLoad, representativeLoad)
 scheme = decodeScheme(cfg, x);
 scheme.totalCoolingCapacityKw = scheme.chillerCapacityKw * scheme.chillerCount;
 scheme.totalFanCapacityKw = scheme.fanCapacityKw * scheme.fanCount;
 scheme.totalPumpCapacityKw = scheme.pumpCapacityKw * scheme.pumpCount;
 scheme.totalAhuAirflow = scheme.ahuAirflow * scheme.ahuCount;
 scheme.redundancyRate = calculateCompositeRedundancy(cfg, scheme, designLoad);
-scheme.lifecycleCost = estimateLifecycleCost(cfg, scheme, mean(loadDemand, "omitnan"), designLoad);
+scheme.lifecycleCost = estimateLifecycleCost(cfg, scheme, representativeLoad, designLoad);
 f = [scheme.lifecycleCost, scheme.redundancyRate];
 end
 
@@ -168,7 +162,7 @@ c = [
 ceq = [];
 end
 
-function [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, designLoad, loadDemand)
+function [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, designLoad, representativeLoad)
 candidateSet = [];
 candidateObj = [];
 
@@ -184,7 +178,7 @@ for i = 1:size(coolingOptions, 1)
                 x = [coolingOptions(i, :), fanOptions(j, :), pumpOptions(k, :), ahuOptions(m, :)];
                 [c, ~] = capacityConstraints(cfg, x, designLoad);
                 if all(c <= 0)
-                    f = capacityObjectives(cfg, x, designLoad, loadDemand);
+                    f = capacityObjectives(cfg, x, designLoad, representativeLoad);
                     candidateSet = [candidateSet; x]; %#ok<AGROW>
                     candidateObj = [candidateObj; f]; %#ok<AGROW>
                 end
@@ -299,9 +293,7 @@ maintenanceCost = initialCost * cfg.maintenanceRate * presentWorthFactor;
 lifecycleCost = initialCost + annualOperatingCost * presentWorthFactor + maintenanceCost;
 end
 
-function evaluationTable = compareSchemes(cfg, baseline, bestScheme, loadDemand)
-designLoad = max(loadDemand, [], "omitnan");
-representativeLoad = mean(loadDemand, "omitnan");
+function evaluationTable = compareSchemes(cfg, baseline, bestScheme, designLoad, representativeLoad)
 baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, representativeLoad, designLoad);
 baseline.redundancyRate = calculateCompositeRedundancy(cfg, baseline, designLoad);
 bestScheme.redundancyRate = calculateCompositeRedundancy(cfg, bestScheme, designLoad);
