@@ -1,20 +1,17 @@
-% Main entry point for the full metro-station HVAC capacity workflow.
-% The script intentionally keeps only orchestration here: parameters come from
-% config.m, while each research step is implemented in its own step*.m file.
+% 地铁车站环控系统容量优化完整流程的主入口。
+% 本脚本只负责流程调度：参数来自 config.m，具体研究步骤分别由 step*.m 文件实现。
 clear; clc; close all;
 
-% Disable TeX parsing so file names, underscores, and English labels are shown
-% literally in figures and legends.
+% 关闭 TeX 解释器，避免图题、图例中的下划线和文件名被 MATLAB 当作格式命令解析。
 set(groot, "defaultTextInterpreter", "none");
 set(groot, "defaultLegendInterpreter", "none");
 set(groot, "defaultAxesTickLabelInterpreter", "none");
 
-% Load all configurable paths, model hyperparameters, economic assumptions, and
-% engineering constraints from one centralized configuration structure.
+% 从统一配置结构中读取路径、模型超参数、经济假设和工程约束。
 cfg = config();
 totalTimer = tic;
 
-% Create output folders before any step writes tables, figures, or models.
+% 在各步骤写出表格、图片或模型文件前，先确保输出目录存在。
 if ~exist(cfg.outputDir, "dir")
     mkdir(cfg.outputDir);
 end
@@ -29,43 +26,38 @@ if ~exist(cfg.modelDir, "dir")
 end
 
 fprintf("\n============================================================\n");
-fprintf("Metro station HVAC capacity optimization workflow started.\n");
-fprintf("Data file: %s\n", cfg.dataFile);
-fprintf("Output folder: %s\n", cfg.outputDir);
+fprintf("地铁车站环控系统容量优化流程开始。\n");
+fprintf("数据文件：%s\n", cfg.dataFile);
+fprintf("输出文件夹：%s\n", cfg.outputDir);
 fprintf("============================================================\n\n");
 
-% Step 1 converts the raw CSV into a cleaned table and standardized feature
-% matrix. Later steps rely on both dataClean and featureData.
-fprintf("[1/4] Data preparation started.\n");
+% 步骤1将原始 CSV 转换为清洗后的数据表和标准化特征矩阵，后续步骤依赖 dataClean 和 featureData。
+fprintf("[1/4] 数据预处理开始。\n");
 [dataRaw, dataClean, featureData] = step1_data_prepare(cfg);
-fprintf("[1/4] Data preparation finished.\n\n");
+fprintf("[1/4] 数据预处理完成。\n\n");
 
-% Step 2 explains the load drivers and extracts typical daily load patterns.
-% Its selected features and cluster labels feed the prediction step.
-fprintf("[2/4] Influence analysis and clustering started.\n");
+% 步骤2分析负荷影响因素并提取典型日负荷模式，其特征选择和聚类结果将进入预测步骤。
+fprintf("[2/4] 影响因素分析与聚类开始。\n");
 analysisResult = step2_analysis_cluster(cfg, dataClean, featureData);
-fprintf("[2/4] Influence analysis and clustering finished.\n\n");
+fprintf("[2/4] 影响因素分析与聚类完成。\n\n");
 
-% Step 3 trains the prediction models and converts the predicted total cooling
-% load into subsystem demand scenarios for equipment sizing.
-fprintf("[3/4] Load prediction started.\n");
+% 步骤3训练负荷预测模型，并将总冷负荷预测结果转换为各子系统容量需求情景。
+fprintf("[3/4] 负荷预测开始。\n");
 predictionResult = step3_load_prediction(cfg, featureData, dataClean, analysisResult);
-fprintf("[3/4] Load prediction finished.\n\n");
+fprintf("[3/4] 负荷预测完成。\n\n");
 
-% Step 4 searches feasible equipment-capacity schemes and selects the final
-% recommendation with TOPSIS after Pareto optimization.
-fprintf("[4/4] Capacity optimization started.\n");
+% 步骤4搜索可行设备容量方案，并在 Pareto 优化后用 TOPSIS 选择推荐方案。
+fprintf("[4/4] 容量优化开始。\n");
 optimizationResult = step4_capacity_optimization(cfg, predictionResult, analysisResult);
-fprintf("[4/4] Capacity optimization finished.\n\n");
+fprintf("[4/4] 容量优化完成。\n\n");
 
-% Save a compact MAT summary so thesis figures/tables can be regenerated or
-% inspected without rerunning the full workflow.
+% 保存汇总 MAT 文件，便于不重新运行全流程时复查或复现论文图表。
 resultFile = fullfile(cfg.modelDir, "bishe_result_summary.mat");
 save(resultFile, ...
     "cfg", "dataRaw", "dataClean", "featureData", ...
     "analysisResult", "predictionResult", "optimizationResult");
 
 fprintf("============================================================\n");
-fprintf("Workflow finished in %.1f seconds.\n", toc(totalTimer));
-fprintf("Results saved to %s\n", resultFile);
+fprintf("流程完成，用时 %.1f 秒。\n", toc(totalTimer));
+fprintf("结果已保存至 %s\n", resultFile);
 fprintf("============================================================\n");

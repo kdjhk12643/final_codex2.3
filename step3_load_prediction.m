@@ -1,26 +1,22 @@
 function predictionResult = step3_load_prediction(cfg, featureData, dataClean, analysisResult)
-%STEP3_LOAD_PREDICTION Train LSTM and BP models, then evaluate predictions.
-% The prediction result becomes the bridge between statistical analysis and
-% engineering sizing: it stores model metrics, full load profiles, and subsystem
-% demand scenarios for step4 capacity optimization.
+%STEP3_LOAD_PREDICTION 训练 LSTM 和 BP 模型，并评估预测结果。
+% 预测结果连接统计分析与工程容量配置：其中保存模型指标、完整负荷预测曲线和子系统需求情景。
 
 stepTimer = tic;
 predictionResult = struct();
 
-% Start from Step 2's Pearson-selected features, then add a standardized daily
-% cluster label for the ablation experiment.
+% 先使用步骤2中 Pearson 筛选出的特征，再额外加入标准化日聚类标签用于消融实验。
 selectedFeatures = string(analysisResult.selectedFeatures);
 selectedFeatures = selectedFeatures(ismember(selectedFeatures, string(featureData.Properties.VariableNames)));
 clusterFeatureName = "cluster_label_zscore";
 featureDataWithCluster = addClusterLabelFeature(cfg, featureData, analysisResult, clusterFeatureName);
 selectedFeaturesWithCluster = unique([selectedFeatures; clusterFeatureName], "stable");
 
-fprintf("  Step 3.1 Building prediction matrix with %d selected features...\n", numel(selectedFeatures));
-% X and y keep chronological order; splitIndexes therefore creates a time-based
-% train/validation/test split rather than a shuffled split.
+fprintf("  步骤 3.1 使用 %d 个筛选特征构建预测矩阵...\n", numel(selectedFeatures));
+% X 和 y 保持时间顺序，因此 splitIndexes 生成的是按时间划分的训练/验证/测试集，而非随机划分。
 [X, y] = buildMatrix(featureData, selectedFeatures, cfg.targetName);
 split = splitIndexes(numel(y), cfg);
-fprintf("  Samples: total=%d, train=%d, val=%d, test=%d.\n", ...
+fprintf("  样本数：总计=%d，训练=%d，验证=%d，测试=%d。\n", ...
     numel(y), numel(split.train), numel(split.val), numel(split.test));
 
 predictionResult.selectedFeatures = selectedFeatures;
@@ -28,23 +24,22 @@ predictionResult.clusterFeatureName = clusterFeatureName;
 predictionResult.selectedFeaturesWithCluster = selectedFeaturesWithCluster;
 predictionResult.split = split;
 
-fprintf("  Step 3.2 Building LSTM sequences, sequence length = %d...\n", cfg.sequenceLength);
-% LSTM samples are sliding windows of historical feature rows.
+fprintf("  步骤 3.2 构建 LSTM 序列，序列长度 = %d...\n", cfg.sequenceLength);
+% LSTM 样本由历史特征行的滑动窗口构成。
 [XSeq, ySeq] = buildSequences(X, y, cfg.sequenceLength);
 seqSplit = splitIndexes(numel(ySeq), cfg);
 
-fprintf("  Step 3.3 Training LSTM, maxEpochs=%d, miniBatchSize=%d...\n", cfg.maxEpochs, cfg.miniBatchSize);
+fprintf("  步骤 3.3 训练 LSTM，最大轮数=%d，小批量大小=%d...\n", cfg.maxEpochs, cfg.miniBatchSize);
 predictionResult.lstm = trainLstmOrFallback(cfg, XSeq, ySeq, seqSplit);
-fprintf("  Step 3.4 Training BP comparison model...\n");
-% The BP baseline removes load-lag features when possible, so it serves as a
-% simpler static-feature comparison to the sequence-based LSTM.
+fprintf("  步骤 3.4 训练 BP 对比模型...\n");
+% BP 基准模型尽量剔除负荷滞后特征，用作比序列型 LSTM 更简单的静态特征对比模型。
 bpFeatures = selectedFeatures(~startsWith(selectedFeatures, "load_lag_"));
 if isempty(bpFeatures)
     bpFeatures = selectedFeatures;
 end
 [Xbp, ybp] = buildMatrix(featureData, bpFeatures, cfg.targetName);
 bpSplit = splitIndexes(numel(ybp), cfg);
-fprintf("  BP baseline uses %d static features and excludes load lag features.\n", numel(bpFeatures));
+fprintf("  BP 基准模型使用 %d 个静态特征，并排除负荷滞后特征。\n", numel(bpFeatures));
 predictionResult.bpFeatures = bpFeatures;
 predictionResult.bp = trainBpOrFallback(cfg, Xbp, ybp, bpSplit);
 
@@ -56,39 +51,36 @@ predictionResult.yTestLSTM = ySeq(seqSplit.test);
 predictionResult.yPredLSTM = predictionResult.lstm.yPredTest;
 predictionResult.metricsLSTM = calculateMetrics(cfg, predictionResult.yTestLSTM, predictionResult.yPredLSTM);
 
-fprintf("  Step 3.5 Running cluster-label ablation experiment...\n");
-% Train two LSTM variants to quantify whether the typical-day cluster label
-% improves prediction accuracy.
+fprintf("  步骤 3.5 运行聚类标签消融实验...\n");
+% 训练两个 LSTM 变体，用于量化典型日聚类标签是否提升预测精度。
 predictionResult.clusterAblation = runClusterAblation( ...
     cfg, featureDataWithCluster, selectedFeatures, selectedFeaturesWithCluster, cfg.targetName);
 
-fprintf("  Step 3.6 Generating full predicted load profile for capacity optimization...\n");
-% Full predicted profile is used for design quantiles and annual energy
-% calculations, not only for test-set accuracy reporting.
+fprintf("  步骤 3.6 生成用于容量优化的完整预测负荷曲线...\n");
+% 完整预测曲线用于设计分位数和年能耗计算，不只用于测试集精度报告。
 predictionResult = generateLoadProfile(cfg, predictionResult, X, y);
 
-fprintf("  Step 3.7 Training subsystem regression models (chiller, fan, pump, AHU)...\n");
-% These regressions map total cooling load to subsystem-level equipment demand.
+fprintf("  步骤 3.7 训练子系统回归模型（冷机、风机、水泵、AHU）...\n");
+% 这些回归模型用于把总冷负荷映射为子系统设备需求。
 subsystemModels = trainSubsystemModels(cfg, dataClean);
-fprintf("    Chiller: %.4f × total_load + %.2f  (R²=%.3f)\n", ...
+fprintf("    冷机：%.4f × 总负荷 + %.2f  (R²=%.3f)\n", ...
     subsystemModels.chiller.Coefficients.Estimate(2), ...
     subsystemModels.chiller.Coefficients.Estimate(1), ...
     subsystemModels.chiller.Rsquared.Ordinary);
-fprintf("    Fan:     %.4f × total_load + %.2f  (R²=%.3f)\n", ...
+fprintf("    风机：%.4f × 总负荷 + %.2f  (R²=%.3f)\n", ...
     subsystemModels.fan.Coefficients.Estimate(2), ...
     subsystemModels.fan.Coefficients.Estimate(1), ...
     subsystemModels.fan.Rsquared.Ordinary);
-fprintf("    Pump:    %.4f × total_load + %.2f  (R²=%.3f)\n", ...
+fprintf("    水泵：%.4f × 总负荷 + %.2f  (R²=%.3f)\n", ...
     subsystemModels.pump.Coefficients.Estimate(2), ...
     subsystemModels.pump.Coefficients.Estimate(1), ...
     subsystemModels.pump.Rsquared.Ordinary);
 
-fprintf("  Step 3.8 Predicting subsystem load profiles from LSTM prediction...\n");
-% Apply subsystem models to the predicted total load profile so optimization can
-% constrain chiller, fan, pump, and AHU capacities separately.
+fprintf("  步骤 3.8 基于 LSTM 预测结果推算子系统负荷曲线...\n");
+% 将子系统模型应用到总负荷预测曲线，使优化环节能分别约束冷机、风机、水泵和 AHU 容量。
 predictionResult = predictSubsystemProfiles(cfg, predictionResult, subsystemModels);
 
-fprintf("  Step 3.9 Building subsystem confidence demand and scenario tables...\n");
+fprintf("  步骤 3.9 生成子系统置信需求和情景需求表...\n");
 predictionResult = buildSubsystemDemandOutputs(cfg, predictionResult);
 
 predictionResult.metrics = table( ...
@@ -99,33 +91,33 @@ predictionResult.metrics = table( ...
     [predictionResult.metricsLSTM.R2; predictionResult.metricsBP.R2], ...
     'VariableNames', {'model', 'RMSE', 'MAE', 'MAPE', 'R2'});
 
-% Write model-performance and demand-scenario evidence for the thesis tables.
+% 写出模型性能和需求情景证据表，供论文表格使用。
 metricsFile = fullfile(cfg.tableDir, "step3_prediction_metrics.csv");
 ablationFile = fullfile(cfg.tableDir, "step3_cluster_ablation_metrics.csv");
 quantileFile = fullfile(cfg.tableDir, "step3_subsystem_demand_quantiles.csv");
 scenarioFile = fullfile(cfg.tableDir, "step3_scenario_demand.csv");
-writetable(predictionResult.metrics, metricsFile);
-writetable(predictionResult.clusterAblation, ablationFile);
-writetable(predictionResult.subsystemDemandQuantiles, quantileFile);
-writetable(predictionResult.scenarioDemandTable, scenarioFile);
+writetable(localizePredictionMetricsForOutput(predictionResult.metrics), metricsFile);
+writetable(localizeAblationTableForOutput(predictionResult.clusterAblation), ablationFile);
+writetable(localizeQuantileTableForOutput(predictionResult.subsystemDemandQuantiles), quantileFile);
+writetable(localizeScenarioTableForOutput(predictionResult.scenarioDemandTable), scenarioFile);
 
 plotStep3Figures(cfg, predictionResult);
 
-fprintf("  LSTM metrics: RMSE=%.3f, MAE=%.3f, MAPE=%.2f%%, R2=%.4f.\n", ...
+fprintf("  LSTM 指标：RMSE=%.3f，MAE=%.3f，MAPE=%.2f%%，R2=%.4f。\n", ...
     predictionResult.metricsLSTM.RMSE, predictionResult.metricsLSTM.MAE, ...
     predictionResult.metricsLSTM.MAPE, predictionResult.metricsLSTM.R2);
-fprintf("  BP metrics:   RMSE=%.3f, MAE=%.3f, MAPE=%.2f%%, R2=%.4f.\n", ...
+fprintf("  BP 指标：RMSE=%.3f，MAE=%.3f，MAPE=%.2f%%，R2=%.4f。\n", ...
     predictionResult.metricsBP.RMSE, predictionResult.metricsBP.MAE, ...
     predictionResult.metricsBP.MAPE, predictionResult.metricsBP.R2);
-fprintf("  Saved: %s\n", metricsFile);
-fprintf("  Saved: %s\n", ablationFile);
-fprintf("  Saved: %s\n", quantileFile);
-fprintf("  Saved: %s\n", scenarioFile);
-fprintf("  Step 3 finished in %.1f seconds.\n", toc(stepTimer));
+fprintf("  已保存：%s\n", metricsFile);
+fprintf("  已保存：%s\n", ablationFile);
+fprintf("  已保存：%s\n", quantileFile);
+fprintf("  已保存：%s\n", scenarioFile);
+fprintf("  步骤 3 完成，用时 %.1f 秒。\n", toc(stepTimer));
 end
 
 function featureDataOut = addClusterLabelFeature(~, featureData, analysisResult, clusterFeatureName)
-%ADDCLUSTERLABELFEATURE Broadcast each daily K-Means label to all samples in that day.
+%ADDCLUSTERLABELFEATURE 将每日 K-Means 标签扩展到该日所有采样点。
 featureDataOut = featureData;
 timestamps = featureDataOut.timestamp;
 dates = dateshift(timestamps, "start", "day");
@@ -136,8 +128,7 @@ for i = 1:numel(analysisResult.dailyDates)
     clusterValues(idx) = analysisResult.clusterLabel(i);
 end
 
-% Fill any unmatched dates defensively, then z-score the categorical label so it
-% is on a scale similar to other standardized predictors.
+% 对未匹配日期做防御性填补，再对类别标签做 zscore，使其量级接近其他标准化特征。
 clusterValues = fillmissing(clusterValues, "nearest");
 clusterValues = fillmissing(clusterValues, "constant", mode(analysisResult.clusterLabel));
 sigma = std(clusterValues, "omitnan");
@@ -149,7 +140,7 @@ end
 end
 
 function ablationTable = runClusterAblation(cfg, featureDataWithCluster, selectedFeatures, selectedFeaturesWithCluster, targetName)
-%RUNCLUSTERABLATION Compare LSTM performance with and without cluster labels.
+%RUNCLUSTERABLATION 对比带聚类标签和不带聚类标签的 LSTM 表现。
 [XBase, yBase] = buildMatrix(featureDataWithCluster, selectedFeatures, targetName);
 [XCluster, yCluster] = buildMatrix(featureDataWithCluster, selectedFeaturesWithCluster, targetName);
 
@@ -177,7 +168,7 @@ ablationTable = table(model, usesClusterLabel, featureCount, RMSE, MAE, MAPE, R2
 end
 
 function [X, y] = buildMatrix(featureData, selectedFeatures, targetName)
-%BUILDMATRIX Extract numeric predictors and drop rows with missing inputs.
+%BUILDMATRIX 提取数值预测因子，并删除输入或目标缺失的样本。
 X = featureData{:, selectedFeatures};
 y = featureData.(targetName);
 valid = all(~isnan(X), 2) & ~isnan(y);
@@ -186,7 +177,7 @@ y = y(valid);
 end
 
 function split = splitIndexes(n, cfg)
-%SPLITINDEXES Create chronological train/validation/test index ranges.
+%SPLITINDEXES 生成按时间顺序划分的训练、验证和测试索引。
 nTrain = floor(n * cfg.trainRatio);
 nVal = floor(n * cfg.valRatio);
 split.train = 1:nTrain;
@@ -195,30 +186,28 @@ split.test = (nTrain + nVal + 1):n;
 end
 
 function [XSeq, ySeq] = buildSequences(X, y, sequenceLength)
-%BUILDSEQUENCES Convert tabular samples into LSTM cell-array sequences.
+%BUILDSEQUENCES 将表格样本转换为 LSTM 所需的 cell 序列。
 n = size(X, 1) - sequenceLength;
 XSeq = cell(n, 1);
 ySeq = zeros(n, 1);
 
 for i = 1:n
-    % MATLAB sequence input expects features-by-timeStep layout for each sample.
+    % MATLAB 序列输入要求每个样本为“特征数 × 时间步”的布局。
     XSeq{i} = X(i:(i + sequenceLength - 1), :)';
     ySeq(i) = y(i + sequenceLength);
 end
 end
 
 function result = trainLstmOrFallback(cfg, XSeq, ySeq, split)
-%TRAINLSTMORFALLBACK Use Deep Learning Toolbox when available, otherwise a
-% moving-average predictor keeps the rest of the workflow executable.
+%TRAINLSTMORFALLBACK 优先使用 Deep Learning Toolbox；不可用时用移动平均保证流程可运行。
 result = struct("model", [], "yPredTest", []);
 
 hasDeepLearning = exist("trainNetwork", "file") == 2 && exist("lstmLayer", "file") == 2;
 if hasDeepLearning
-    fprintf("    Deep Learning Toolbox detected. Using trainNetwork.\n");
+    fprintf("    检测到 Deep Learning Toolbox，使用 trainNetwork。\n");
     inputSize = size(XSeq{1}, 1);
     yTrain = ySeq(split.train);
-    % Normalize only the target for stable neural-network training; predictions
-    % are transformed back to kW before metrics are calculated.
+    % 仅标准化目标值以提高神经网络训练稳定性；计算指标前再换算回 kW。
     targetMean = mean(yTrain, "omitnan");
     targetStd = std(yTrain, "omitnan");
     if targetStd == 0 || isnan(targetStd)
@@ -256,19 +245,19 @@ if hasDeepLearning
     result.targetMean = targetMean;
     result.targetStd = targetStd;
 else
-    fprintf("    Deep Learning Toolbox not detected. Using moving-average fallback.\n");
+    fprintf("    未检测到 Deep Learning Toolbox，使用移动平均回退模型。\n");
     result.model = "fallback_moving_average";
     result.yPredTest = movingAverageFallback(ySeq, split.test, cfg.sequenceLength);
 end
 end
 
 function result = trainBpOrFallback(cfg, X, y, split)
-%TRAINBPORFALLBACK Train a BP neural net if available, otherwise linear regression.
+%TRAINBPORFALLBACK 优先训练 BP 神经网络；不可用时回退到线性回归。
 result = struct("model", [], "yPredTest", []);
 
 hasNeuralNet = exist("fitnet", "file") == 2;
 if hasNeuralNet
-    fprintf("    Neural Network Toolbox detected. Using fitnet.\n");
+    fprintf("    检测到 Neural Network Toolbox，使用 fitnet。\n");
     net = fitnet(cfg.bpHiddenUnits);
     net.divideFcn = "divideind";
     net.divideParam.trainInd = split.train;
@@ -281,7 +270,7 @@ if hasNeuralNet
     result.model = train(net, X', y');
     result.yPredTest = result.model(X(split.test, :)')';
 else
-    fprintf("    fitnet not detected. Using linear regression fallback.\n");
+    fprintf("    未检测到 fitnet，使用线性回归回退模型。\n");
     mdl = fitlm(X(split.train, :), y(split.train));
     result.model = mdl;
     result.yPredTest = predict(mdl, X(split.test, :));
@@ -289,7 +278,7 @@ end
 end
 
 function plotMode = trainingPlotMode(cfg)
-%TRAININGPLOTMODE Map cfg.showTrainingProgress to MATLAB trainingOptions syntax.
+%TRAININGPLOTMODE 将 cfg.showTrainingProgress 映射为 MATLAB trainingOptions 参数。
 if cfg.showTrainingProgress
     plotMode = "training-progress";
 else
@@ -298,7 +287,7 @@ end
 end
 
 function yPred = movingAverageFallback(y, testIdx, windowSize)
-%MOVINGAVERAGEFALLBACK Simple baseline used when LSTM training is unavailable.
+%MOVINGAVERAGEFALLBACK LSTM 不可训练时使用的简单移动平均基准。
 yPred = zeros(numel(testIdx), 1);
 for i = 1:numel(testIdx)
     idx = testIdx(i);
@@ -308,7 +297,7 @@ end
 end
 
 function metrics = calculateMetrics(cfg, yTrue, yPred)
-%CALCULATEMETRICS Return common regression metrics in physical units.
+%CALCULATEMETRICS 返回物理量纲下的常用回归指标。
 yTrue = yTrue(:);
 yPred = yPred(:);
 valid = ~isnan(yTrue) & ~isnan(yPred);
@@ -318,16 +307,16 @@ yPred = yPred(valid);
 err = yTrue - yPred;
 metrics.RMSE = sqrt(mean(err .^ 2));
 metrics.MAE = mean(abs(err));
-% MAPE denominator is clipped to avoid unstable percentages at very low load.
+% 对 MAPE 分母做下限约束，避免低负荷时百分比异常波动。
 metrics.MAPE = mean(abs(err ./ max(abs(yTrue), cfg.mapeMinLoadKw))) * 100;
 metrics.R2 = 1 - sum(err .^ 2) / sum((yTrue - mean(yTrue)) .^ 2);
 end
 
 function result = generateLoadProfile(cfg, result, X, y)
-%GENERATELOADPROFILE Predict the full available sequence for capacity sizing.
+%GENERATELOADPROFILE 预测完整可用序列，用于后续容量配置。
 if strcmp(result.lstm.model, "fallback_moving_average")
     fullPrediction = result.yPredLSTM;
-    fprintf("    Warning: LSTM model unavailable, using test-set predictions only.\n");
+    fprintf("    警告：LSTM 模型不可用，仅使用测试集预测结果。\n");
 else
     [XSeqFull, ~] = buildSequences(X, y, cfg.sequenceLength);
     yPredNorm = predict(result.lstm.model, XSeqFull, "MiniBatchSize", cfg.miniBatchSize);
@@ -338,22 +327,21 @@ fullPrediction = fullPrediction(:);
 result.predictedTotalLoadKw = fullPrediction;
 result.predictedProfile = struct();
 result.predictedProfile.totalCoolingLoadKw = fullPrediction;
-% designLoadKw is the selected confidence quantile; representativeLoadKw is the
-% average load used by part-load and lifecycle-energy calculations.
+% designLoadKw 为选定置信分位数负荷；representativeLoadKw 为部分负荷和生命周期能耗计算使用的平均负荷。
 result.designLoadKw = quantileValue(fullPrediction, cfg.designConfidenceLevel);
 result.representativeLoadKw = mean(fullPrediction, "omitnan");
 
-fprintf("    Predicted profile: %d samples, design=%.2f kW, representative=%.2f kW.\n", ...
+fprintf("    预测曲线：%d 个样本，设计负荷=%.2f kW，代表负荷=%.2f kW。\n", ...
     numel(fullPrediction), result.designLoadKw, result.representativeLoadKw);
 end
 
 function models = trainSubsystemModels(cfg, dataClean)
-%TRAINSUBSYSTEMMODELS Fit simple regressions from total load to subsystem demand.
+%TRAINSUBSYSTEMMODELS 拟合总负荷到子系统需求的简化回归关系。
 models = struct();
 
 hasFitlm = exist("fitlm", "file") == 2;
 if ~hasFitlm
-    fprintf("    Warning: Statistics Toolbox not detected. Using simplified linear regression.\n");
+    fprintf("    警告：未检测到 Statistics Toolbox，使用简化线性回归。\n");
 end
 
 models.chiller = fitlm(dataClean.(cfg.targetName), dataClean.chiller_load_kw);
@@ -362,10 +350,10 @@ models.pump = fitlm(dataClean.(cfg.targetName), dataClean.pump_power_kw);
 end
 
 function result = predictSubsystemProfiles(cfg, result, models)
-%PREDICTSUBSYSTEMPROFILES Convert total-load prediction into equipment demands.
+%PREDICTSUBSYSTEMPROFILES 将总负荷预测转换为设备子系统需求。
 profile = result.predictedProfile.totalCoolingLoadKw(:);
 
-% Negative regression predictions have no physical meaning, so clamp at zero.
+% 负的回归预测没有物理意义，因此截断为零。
 chillerProfile = max(predict(models.chiller, profile), 0);
 fanProfile = max(predict(models.fan, profile), 0);
 pumpProfile = max(predict(models.pump, profile), 0);
@@ -376,8 +364,7 @@ result.predictedProfile.fanPowerKw = fanProfile;
 result.predictedProfile.pumpPowerKw = pumpProfile;
 result.predictedProfile.ahuAirflow = ahuProfile;
 
-% Quantile design loads are the values later converted into capacity
-% constraints in step4.
+% 分位数设计负荷将在步骤4中转换为容量约束。
 result.chillerDesignLoadKw = quantileValue(chillerProfile, cfg.designConfidenceLevel);
 result.fanDesignLoadKw = quantileValue(fanProfile, cfg.designConfidenceLevel);
 result.pumpDesignLoadKw = quantileValue(pumpProfile, cfg.designConfidenceLevel);
@@ -388,13 +375,13 @@ result.fanRepresentativeLoadKw = mean(fanProfile, "omitnan");
 result.pumpRepresentativeLoadKw = mean(pumpProfile, "omitnan");
 result.ahuRepresentativeLoadKw = mean(ahuProfile, "omitnan");
 
-fprintf("    Subsystem design loads: chiller=%.1f kW, fan=%.1f kW, pump=%.1f kW, AHU=%.0f m³/h.\n", ...
+fprintf("    子系统设计需求：冷机=%.1f kW，风机=%.1f kW，水泵=%.1f kW，AHU=%.0f m³/h。\n", ...
     result.chillerDesignLoadKw, result.fanDesignLoadKw, ...
     result.pumpDesignLoadKw, result.ahuDesignLoadKw);
 end
 
 function result = buildSubsystemDemandOutputs(cfg, result)
-%BUILDSUBSYSTEMDEMANDOUTPUTS Create demand quantile and scenario tables.
+%BUILDSUBSYSTEMDEMANDOUTPUTS 生成需求分位数表和情景需求表。
 profiles = result.predictedProfile;
 subsystem = ["total"; "chiller"; "fan"; "pump"; "ahu"];
 unit = ["kW"; "kW"; "kW"; "kW"; "m3_per_h"];
@@ -418,7 +405,7 @@ end
 
 result.subsystemDemandQuantiles = table(subsystem, unit);
 for j = 1:numel(quantileColumns)
-    % Add P50/P90/P95/P99 columns dynamically from cfg.capacityConfidenceLevels.
+    % 根据 cfg.capacityConfidenceLevels 动态添加 P50/P90/P95/P99 等列。
     result.subsystemDemandQuantiles.(quantileColumns(j)) = quantileValues(:, j);
 end
 maxDemand = zeros(numel(subsystem), 1);
@@ -437,7 +424,7 @@ ahuDemand = zeros(numel(scenarioNames), 1);
 
 for i = 1:numel(scenarioNames)
     q = scenarioQuantiles(i);
-    % Scenario demand values are quantiles of the predicted subsystem profiles.
+    % 各情景需求值取自预测子系统曲线的对应分位数。
     totalCoolingLoadKw(i) = quantileValue(profiles.totalCoolingLoadKw, q);
     chillerDemandKw(i) = quantileValue(profiles.chillerLoadKw, q);
     fanDemandKw(i) = quantileValue(profiles.fanPowerKw, q);
@@ -462,7 +449,7 @@ result.scenarioDemandTable = table(scenarioNames, scenarioQuantiles, totalCoolin
 end
 
 function value = quantileValue(values, level)
-%QUANTILEVALUE Lightweight empirical quantile helper independent of toolboxes.
+%QUANTILEVALUE 不依赖额外工具箱的轻量经验分位数函数。
 values = values(:);
 values = values(~isnan(values));
 if isempty(values)
@@ -475,48 +462,48 @@ value = values(idx);
 end
 
 function plotStep3Figures(cfg, predictionResult)
-%PLOTSTEP3FIGURES Export observed-vs-predicted and model-comparison figures.
+%PLOTSTEP3FIGURES 导出实测-预测对比图和模型误差对比图。
 if ~(cfg.showFigures || cfg.saveFigures)
     return;
 end
 
-% LSTM test-set curve.
-fig1 = figure("Name", "Step 3 - LSTM Prediction", "Visible", figureVisibility(cfg));
+% LSTM 测试集曲线。
+fig1 = figure("Name", "步骤3 - LSTM 预测", "Visible", figureVisibility(cfg));
 plot(predictionResult.yTestLSTM, "LineWidth", 1.4);
 hold on;
 plot(predictionResult.yPredLSTM, "LineWidth", 1.4);
 hold off;
-xlabel("Test sample");
-ylabel("Cooling load / kW");
-title("LSTM Load Prediction");
-legend("Observed", "Predicted", "Location", "best");
+xlabel("测试样本");
+ylabel("冷负荷 / kW");
+title("LSTM 负荷预测");
+legend("实测值", "预测值", "Location", "best");
 grid on;
 saveFigureIfNeeded(cfg, fig1, "step3_lstm_prediction.png");
 
-% BP comparison curve.
-fig2 = figure("Name", "Step 3 - BP Prediction", "Visible", figureVisibility(cfg));
+% BP 对比模型曲线。
+fig2 = figure("Name", "步骤3 - BP 预测", "Visible", figureVisibility(cfg));
 plot(predictionResult.yTest, "LineWidth", 1.4);
 hold on;
 plot(predictionResult.yPredBP, "LineWidth", 1.4);
 hold off;
-xlabel("Test sample");
-ylabel("Cooling load / kW");
-title("BP Load Prediction");
-legend("Observed", "Predicted", "Location", "best");
+xlabel("测试样本");
+ylabel("冷负荷 / kW");
+title("BP 负荷预测");
+legend("实测值", "预测值", "Location", "best");
 grid on;
 saveFigureIfNeeded(cfg, fig2, "step3_bp_prediction.png");
 
-% RMSE comparison highlights prediction accuracy for the thesis result section.
-fig3 = figure("Name", "Step 3 - Model Metrics", "Visible", figureVisibility(cfg));
+% RMSE 对比用于论文结果部分展示预测精度差异。
+fig3 = figure("Name", "步骤3 - 模型指标", "Visible", figureVisibility(cfg));
 bar(categorical(predictionResult.metrics.model), predictionResult.metrics.RMSE);
 ylabel("RMSE / kW");
-title("Prediction Error Comparison");
+title("预测误差对比");
 grid on;
 saveFigureIfNeeded(cfg, fig3, "step3_model_rmse_comparison.png");
 end
 
 function visible = figureVisibility(cfg)
-%FIGUREVISIBILITY Convert the showFigures flag to MATLAB's figure Visible value.
+%FIGUREVISIBILITY 将 showFigures 标志转换为 MATLAB 图窗 Visible 属性。
 if cfg.showFigures
     visible = "on";
 else
@@ -525,7 +512,7 @@ end
 end
 
 function saveFigureIfNeeded(cfg, fig, fileName)
-%SAVEFIGUREIFNEEDED Write PNG figures only when cfg.saveFigures is enabled.
+%SAVEFIGUREIFNEEDED 仅在 cfg.saveFigures 启用时写出 PNG 图片。
 if cfg.saveFigures
     ensureFigureDir(cfg);
     filePath = fullfile(cfg.figureDir, fileName);
@@ -541,8 +528,112 @@ end
 end
 
 function ensureFigureDir(cfg)
-%ENSUREFIGUREDIR Create the figure output folder for direct step execution.
+%ENSUREFIGUREDIR 支持单独运行本步骤时自动创建图片输出目录。
 if ~exist(cfg.figureDir, "dir")
     mkdir(cfg.figureDir);
+end
+end
+
+function tableOut = localizePredictionMetricsForOutput(tableIn)
+%LOCALIZEPREDICTIONMETRICSFOROUTPUT 生成预测模型指标表的中文导出副本。
+tableOut = tableIn;
+tableOut.Properties.VariableNames = {'模型', '均方根误差_kW', '平均绝对误差_kW', '平均绝对百分比误差_百分比', '决定系数R2'};
+end
+
+function tableOut = localizeAblationTableForOutput(tableIn)
+%LOCALIZEABLATIONTABLEFOROUTPUT 生成聚类标签消融表的中文导出副本。
+tableOut = tableIn;
+tableOut.model = localizeAblationModelNames(tableOut.model);
+tableOut.Properties.VariableNames = {'模型', '是否使用聚类标签', '特征数量', ...
+    '均方根误差_kW', '平均绝对误差_kW', '平均绝对百分比误差_百分比', '决定系数R2'};
+end
+
+function tableOut = localizeQuantileTableForOutput(tableIn)
+%LOCALIZEQUANTILETABLEFOROUTPUT 生成子系统需求分位数表的中文导出副本。
+tableOut = tableIn;
+tableOut.subsystem = localizeSubsystemNames(tableOut.subsystem);
+tableOut.unit = localizeUnitNames(tableOut.unit);
+names = string(tableOut.Properties.VariableNames);
+names(names == "subsystem") = "子系统";
+names(names == "unit") = "单位";
+names(names == "maxDemand") = "最大需求";
+tableOut.Properties.VariableNames = cellstr(names);
+end
+
+function tableOut = localizeScenarioTableForOutput(tableIn)
+%LOCALIZESCENARIOTABLEFOROUTPUT 生成情景需求表的中文导出副本。
+tableOut = tableIn;
+tableOut.scenario = localizeScenarioNames(tableOut.scenario);
+tableOut.Properties.VariableNames = {'情景', '分位数', '总冷负荷_kW', ...
+    '冷机需求_kW', '风机需求_kW', '水泵需求_kW', 'AHU风量需求_m3_h'};
+end
+
+function namesOut = localizeAblationModelNames(namesIn)
+%LOCALIZEABLATIONMODELNAMES 将消融实验模型名转换为中文展示名。
+namesIn = string(namesIn);
+namesOut = strings(size(namesIn));
+for i = 1:numel(namesIn)
+    switch namesIn(i)
+        case "lstm_without_cluster"
+            namesOut(i) = "不含聚类标签的LSTM";
+        case "lstm_with_cluster"
+            namesOut(i) = "含聚类标签的LSTM";
+        otherwise
+            namesOut(i) = namesIn(i);
+    end
+end
+end
+
+function namesOut = localizeSubsystemNames(namesIn)
+%LOCALIZESUBSYSTEMNAMES 将子系统英文名转换为中文。
+namesIn = string(namesIn);
+namesOut = strings(size(namesIn));
+for i = 1:numel(namesIn)
+    switch namesIn(i)
+        case "total"
+            namesOut(i) = "总冷负荷";
+        case "chiller"
+            namesOut(i) = "冷机";
+        case "fan"
+            namesOut(i) = "风机";
+        case "pump"
+            namesOut(i) = "水泵";
+        case "ahu"
+            namesOut(i) = "AHU";
+        otherwise
+            namesOut(i) = namesIn(i);
+    end
+end
+end
+
+function namesOut = localizeScenarioNames(namesIn)
+%LOCALIZESCENARIONAMES 将情景英文名转换为中文。
+namesIn = string(namesIn);
+namesOut = strings(size(namesIn));
+for i = 1:numel(namesIn)
+    switch namesIn(i)
+        case "typical"
+            namesOut(i) = "典型情景";
+        case "peak"
+            namesOut(i) = "峰值情景";
+        case "extreme"
+            namesOut(i) = "极端情景";
+        otherwise
+            namesOut(i) = namesIn(i);
+    end
+end
+end
+
+function namesOut = localizeUnitNames(namesIn)
+%LOCALIZEUNITNAMES 将单位展示名转换为中文或规范写法。
+namesIn = string(namesIn);
+namesOut = strings(size(namesIn));
+for i = 1:numel(namesIn)
+    switch namesIn(i)
+        case "m3_per_h"
+            namesOut(i) = "m3/h";
+        otherwise
+            namesOut(i) = namesIn(i);
+    end
 end
 end
