@@ -1,11 +1,16 @@
 function optimizationResult = step4_capacity_optimization(cfg, predictionResult, analysisResult)
 %STEP4_CAPACITY_OPTIMIZATION Optimize capacity with NSGA-II and TOPSIS.
+% This step converts predicted demand into discrete equipment selections. The
+% two main objectives are lifecycle cost and composite capacity redundancy.
 
 stepTimer = tic;
 fprintf("  Step 4.1 Loading design load from LSTM full prediction...\n");
 optimizationScenarioName = cfg.optimizationScenarioName;
+% Demand comes from Step 3's scenario table, usually the extreme/P99 scenario.
 demand = predictionResult.scenarioDemand.(optimizationScenarioName);
 rawDemand = demand;
+% Add a prediction-error margin so sizing does not rely on the point prediction
+% alone. The margin is scaled from the LSTM test RMSE.
 predictionErrorMarginKw = predictionResult.metricsLSTM.RMSE * cfg.predictionErrorRmseFactor;
 demand = applyPredictionErrorMargin(cfg, demand, predictionErrorMarginKw);
 designLoad = demand.totalCoolingLoadKw;
@@ -30,6 +35,7 @@ optimizationResult.designDemand = demand;
 optimizationResult.rawDesignDemand = rawDemand;
 optimizationResult.predictionErrorMarginKw = predictionErrorMarginKw;
 fprintf("  Step 4.2 Building baseline scheme...\n");
+% Baseline is a conventional oversized scheme used as the comparison reference.
 optimizationResult.baselineScheme = buildBaselineScheme(cfg, demand);
 fprintf("  Baseline cooling capacity = %.2f kW, redundancy = %.2f%%.\n", ...
     optimizationResult.baselineScheme.totalCoolingCapacityKw, ...
@@ -37,6 +43,8 @@ fprintf("  Baseline cooling capacity = %.2f kW, redundancy = %.2f%%.\n", ...
 
 fprintf("  Step 4.3 Running capacity optimization, population=%d, generations=%d...\n", ...
     cfg.populationSize, cfg.maxGenerations);
+% Candidate solutions encode unit capacity and count for chiller, fan, pump,
+% and AHU. Each solution is checked against engineering constraints.
 [paretoSet, paretoObjective] = solveCapacityOptimization(cfg, demand, representativeLoad, loadProfileKw);
 [paretoObjective, uniqueIdx] = unique(paretoObjective, "rows", "stable");
 paretoSet = paretoSet(uniqueIdx, :);
@@ -44,12 +52,15 @@ paretoSet = paretoSet(uniqueIdx, :);
 fprintf("  Pareto solutions generated: %d.\n", size(paretoSet, 1));
 
 fprintf("  Step 4.4 Ranking Pareto solutions with TOPSIS...\n");
+% Pareto optimization keeps trade-off candidates; TOPSIS chooses one final
+% recommendation using cfg.topsisWeights.
 [bestScheme, topsisTable] = chooseByTopsis(cfg, paretoSet, paretoObjective);
 
 optimizationResult.paretoSet = paretoSet;
 optimizationResult.paretoObjective = paretoObjective;
 optimizationResult.bestScheme = decodeScheme(cfg, bestScheme);
 optimizationResult.topsisTable = topsisTable;
+% Build result tables used directly by the thesis result and discussion section.
 optimizationResult.evaluationTable = compareSchemes(cfg, optimizationResult.baselineScheme, optimizationResult.bestScheme, demand, representativeLoad, loadProfileKw);
 optimizationResult.subsystemRedundancyTable = compareSubsystemRedundancy(cfg, optimizationResult.baselineScheme, optimizationResult.bestScheme, demand);
 optimizationResult.scenarioCapacityCheck = buildScenarioCapacityCheck(cfg, optimizationResult.bestScheme, predictionResult.scenarioDemand);
@@ -62,6 +73,8 @@ optimizationResult.researchLinkageTable = build_research_linkage_table(cfg, pred
 [optimizationResult.sensitivityTable, optimizationResult.engineeringBoundaryTable] = ...
     analyze_capacity_sensitivity(cfg, optimizationResult);
 
+% Persist all Step 4 evidence tables separately so the optimization decision can
+% be audited without opening the MAT summary.
 topsisFile = fullfile(cfg.tableDir, "step4_topsis_ranking.csv");
 evaluationFile = fullfile(cfg.tableDir, "step4_scheme_evaluation.csv");
 subsystemFile = fullfile(cfg.tableDir, "step4_subsystem_redundancy.csv");
@@ -96,6 +109,7 @@ fprintf("  Step 4 finished in %.1f seconds.\n", toc(stepTimer));
 end
 
 function demandOut = applyPredictionErrorMargin(cfg, demandIn, predictionErrorMarginKw)
+%APPLYPREDICTIONERRORMARGIN Increase design demand by the LSTM error allowance.
 demandOut = demandIn;
 if predictionErrorMarginKw <= 0
     return;
@@ -106,6 +120,8 @@ fanPerCoolingKw = demandIn.fanDemandKw / totalBase;
 pumpPerCoolingKw = demandIn.pumpDemandKw / totalBase;
 
 demandOut.predictionErrorMarginKw = predictionErrorMarginKw;
+% Chiller demand tracks the total cooling-load margin directly. Fan, pump, and
+% AHU margins are scaled by their current demand-to-cooling-load ratios.
 demandOut.totalCoolingLoadKw = demandIn.totalCoolingLoadKw + predictionErrorMarginKw;
 demandOut.chillerDemandKw = demandIn.chillerDemandKw + predictionErrorMarginKw;
 demandOut.fanDemandKw = demandIn.fanDemandKw + predictionErrorMarginKw * fanPerCoolingKw;
@@ -114,6 +130,7 @@ demandOut.ahuDemand = demandIn.ahuDemand + predictionErrorMarginKw * cfg.ahuAirf
 end
 
 function [paretoSet, paretoObjective] = limitParetoSetToTargetBand(paretoSet, paretoObjective)
+%LIMITPARETOSETTOTARGETBAND Keep exported Pareto tables compact and readable.
 targetCount = 32;
 if size(paretoSet, 1) <= targetCount
     return;
@@ -127,11 +144,13 @@ paretoObjective = paretoObjective(selected, :);
 end
 
 function baseline = buildBaselineScheme(cfg, demand)
+%BUILDBASELINESCHEME Construct a rule-based reference scheme with fixed redundancy.
 targetCapacity = demand.chillerDemandKw * (1 + cfg.baselineRedundancyRate);
 chillerCapacity = max(cfg.chillerCapacityList);
 chillerCount = max(cfg.chillerCountRange);
 
 for count = cfg.chillerCountRange
+    % Choose the first unit capacity that reaches the target for this count.
     capacity = cfg.chillerCapacityList(find(cfg.chillerCapacityList * count >= targetCapacity, 1, "first"));
     if ~isempty(capacity)
         chillerCapacity = capacity;
@@ -154,10 +173,12 @@ baseline.totalFanCapacityKw = baseline.fanCapacityKw * baseline.fanCount;
 baseline.totalPumpCapacityKw = baseline.pumpCapacityKw * baseline.pumpCount;
 baseline.totalAhuAirflow = baseline.ahuAirflow * baseline.ahuCount;
 baseline.redundancyRate = calculateCompositeRedundancy(cfg, baseline, demand);
+% Lifecycle cost uses the same energy model as optimized schemes for a fair comparison.
 baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, demand.totalCoolingLoadKw, demand, demand.totalCoolingLoadKw);
 end
 
 function [unitCapacity, count] = chooseBaselinePair(capacityList, countRange, targetCapacity)
+%CHOOSEBASELINEPAIR Select the smallest total installed capacity meeting target.
 unitCapacity = max(capacityList);
 count = max(countRange);
 bestTotal = inf;
@@ -175,6 +196,7 @@ end
 end
 
 function [paretoSet, paretoObjective] = solveCapacityOptimization(cfg, demand, representativeLoad, loadProfileKw)
+%SOLVECAPACITYOPTIMIZATION Use NSGA-II when available, otherwise enumerate grid candidates.
 hasGamultiobj = exist("gamultiobj", "file") == 2;
 
 if hasGamultiobj
@@ -193,10 +215,15 @@ if hasGamultiobj
         "MaxGenerations", cfg.maxGenerations, ...
         "Display", "iter");
 
+    % Decision vector x contains eight integer indices:
+    % [chillerCapIdx, chillerCountIdx, fanCapIdx, fanCountIdx,
+    %  pumpCapIdx, pumpCountIdx, ahuFlowIdx, ahuCountIdx].
     objective = @(x) capacityObjectives(cfg, round(x), demand, representativeLoad, loadProfileKw);
     constraint = @(x) capacityConstraints(cfg, round(x), demand, representativeLoad);
     [paretoSet, paretoObjective] = gamultiobj(objective, nvars, [], [], [], [], lb, ub, constraint, options);
     paretoSet = round(paretoSet);
+    % Merge NSGA-II output with deterministic enumeration so discrete feasible
+    % candidates are not missed by the continuous optimizer interface.
     [discreteSet, discreteObjective] = enumerateDiscretePareto(cfg, demand, representativeLoad, loadProfileKw);
     paretoSet = [paretoSet; discreteSet];
     paretoObjective = [paretoObjective; discreteObjective];
@@ -207,6 +234,7 @@ end
 end
 
 function f = capacityObjectives(cfg, x, demand, representativeLoad, loadProfileKw)
+%CAPACITYOBJECTIVES Return [lifecycle cost, composite redundancy] for one scheme.
 scheme = decodeScheme(cfg, x);
 scheme.totalCoolingCapacityKw = scheme.chillerCapacityKw * scheme.chillerCount;
 scheme.totalFanCapacityKw = scheme.fanCapacityKw * scheme.fanCount;
@@ -218,6 +246,7 @@ f = [scheme.lifecycleCost, scheme.redundancyRate];
 end
 
 function [c, ceq] = capacityConstraints(cfg, x, demand, representativeLoad)
+%CAPACITYCONSTRAINTS Enforce demand coverage, part-load, and subsystem matching.
 scheme = decodeScheme(cfg, x);
 totalCoolingCapacity = scheme.chillerCapacityKw * scheme.chillerCount;
 totalFanCapacity = scheme.fanCapacityKw * scheme.fanCount;
@@ -229,6 +258,8 @@ typicalChillerPLR = representativeLoad / max(totalCoolingCapacity, eps);
 minimumPLRConstraint = cfg.minTypicalChillerPLR - typicalChillerPLR;
 matchingConstraints = buildMatchingConstraints(cfg, totalCoolingCapacity, totalFanCapacity, totalPumpCapacity, totalAhuAirflow);
 
+% MATLAB nonlinear inequality constraints require c <= 0. Each positive value
+% indicates the candidate violates a required minimum capacity or ratio band.
 c = [
     cfg.chillerSafetyFactor * demand.chillerDemandKw * extremeMarginFactor - totalCoolingCapacity
     cfg.fanSafetyFactor * demand.fanDemandKw * extremeMarginFactor - totalFanCapacity
@@ -241,6 +272,7 @@ ceq = [];
 end
 
 function c = buildMatchingConstraints(cfg, totalCoolingCapacity, totalFanCapacity, totalPumpCapacity, totalAhuAirflow)
+%BUILDMATCHINGCONSTRAINTS Keep airside/waterside sizes proportional to cooling capacity.
 fanRatio = totalFanCapacity / max(totalCoolingCapacity, eps);
 pumpRatio = totalPumpCapacity / max(totalCoolingCapacity, eps);
 ahuRatio = totalAhuAirflow / max(totalCoolingCapacity, eps);
@@ -256,9 +288,12 @@ c = [
 end
 
 function [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, demand, representativeLoad, loadProfileKw)
+%ENUMERATEDISCRETEPARETO Deterministic fallback over a narrowed feasible grid.
 candidateSet = [];
 candidateObj = [];
 
+% Build short candidate lists around the demand threshold to avoid exhaustive
+% full Cartesian search over every equipment combination.
 coolingOptions = buildPairOptions(cfg.chillerCapacityList, cfg.chillerCountRange, demand.chillerDemandKw, cfg.chillerSafetyFactor, 22);
 fanOptions = buildPairOptions(cfg.fanCapacityList, cfg.fanCountRange, demand.fanDemandKw, cfg.fanSafetyFactor, 10);
 pumpOptions = buildPairOptions(cfg.pumpCapacityList, cfg.pumpCountRange, demand.pumpDemandKw, cfg.pumpSafetyFactor, 10);
@@ -271,6 +306,7 @@ for i = 1:size(coolingOptions, 1)
                 x = [coolingOptions(i, :), fanOptions(j, :), pumpOptions(k, :), ahuOptions(m, :)];
                 [c, ~] = capacityConstraints(cfg, x, demand, representativeLoad);
                 if all(c <= 0)
+                    % Only feasible combinations enter Pareto screening.
                     f = capacityObjectives(cfg, x, demand, representativeLoad, loadProfileKw);
                     candidateSet = [candidateSet; x]; %#ok<AGROW>
                     candidateObj = [candidateObj; f]; %#ok<AGROW>
@@ -283,6 +319,8 @@ end
 costTolerance = 0.08;
 redundancyTolerance = 0.025;
 isPareto = true(size(candidateObj, 1), 1);
+% Relaxed dominance removes options that are clearly worse in both objectives
+% while retaining a readable spread of trade-off candidates.
 for i = 1:size(candidateObj, 1)
     for j = 1:size(candidateObj, 1)
         costDominates = candidateObj(j, 1) <= candidateObj(i, 1) * (1 - costTolerance);
@@ -300,6 +338,7 @@ paretoObjective = candidateObj(isPareto, :);
 end
 
 function options = buildPairOptions(capacityList, countRange, demand, safetyFactor, maxOptions)
+%BUILDPAIROPTIONS Generate compact unit-capacity/count options near the target.
 rows = [];
 scores = [];
 target = demand * safetyFactor;
@@ -310,6 +349,7 @@ for i = 1:numel(capacityList)
         if totalCapacity >= target
             redundancy = (totalCapacity - demand) / demand;
             if redundancy <= 0.85
+                % Score prefers lower redundancy and slightly fewer parallel units.
                 rows = [rows; i, j]; %#ok<AGROW>
                 scores = [scores; redundancy + 0.015 * countRange(j)]; %#ok<AGROW>
             end
@@ -323,6 +363,7 @@ options = rows(order, :);
 end
 
 function [bestX, topsisTable] = chooseByTopsis(cfg, paretoSet, paretoObjective)
+%CHOOSEBYTOPSIS Rank Pareto candidates by distance to ideal cost/redundancy.
 normalized = paretoObjective ./ sqrt(sum(paretoObjective .^ 2, 1));
 weighted = normalized .* cfg.topsisWeights;
 idealBest = min(weighted, [], 1);
@@ -344,6 +385,7 @@ topsisTable = array2table([paretoObjective, score], ...
 end
 
 function scheme = decodeScheme(cfg, x)
+%DECODESCHEME Convert integer decision indices into physical equipment sizes.
 scheme = struct();
 scheme.chillerCapacityKw = cfg.chillerCapacityList(x(1));
 scheme.chillerCount = cfg.chillerCountRange(x(2));
@@ -360,6 +402,7 @@ scheme.totalAhuAirflow = scheme.ahuAirflow * scheme.ahuCount;
 end
 
 function initialCost = estimateInitialCost(cfg, scheme)
+%ESTIMATEINITIALCOST Sum equipment investment for the selected units/counts.
 initialCost = ...
     scheme.chillerCapacityKw * scheme.chillerCount * cfg.chillerUnitCostPerKw + ...
     scheme.fanCapacityKw * scheme.fanCount * cfg.fanUnitCostPerKw + ...
@@ -368,6 +411,7 @@ initialCost = ...
 end
 
 function annualEnergy = estimateAnnualEnergy(cfg, scheme, representativeLoad, demand, loadProfileKw)
+%ESTIMATEANNUALENERGY Delegate part-load energy calculation to the detailed model.
 if nargin < 5 || isempty(loadProfileKw)
     loadProfileKw = representativeLoad;
 end
@@ -375,6 +419,7 @@ annualEnergy = hvac_estimate_annual_energy_detailed(cfg, scheme, loadProfileKw, 
 end
 
 function lifecycleCost = estimateLifecycleCost(cfg, scheme, representativeLoad, demand, loadProfileKw)
+%ESTIMATELIFECYCLECOST Convert investment, energy, and maintenance into present value.
 initialCost = estimateInitialCost(cfg, scheme);
 annualEnergy = estimateAnnualEnergy(cfg, scheme, representativeLoad, demand, loadProfileKw);
 annualOperatingCost = annualEnergy * cfg.electricityPrice;
@@ -384,6 +429,7 @@ lifecycleCost = initialCost + annualOperatingCost * presentWorthFactor + mainten
 end
 
 function evaluationTable = compareSchemes(cfg, baseline, bestScheme, demand, representativeLoad, loadProfileKw)
+%COMPARESCHEMES Build the baseline-vs-optimized summary table.
 baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, representativeLoad, demand, loadProfileKw);
 baseline.redundancyRate = calculateCompositeRedundancy(cfg, baseline, demand);
 bestScheme.redundancyRate = calculateCompositeRedundancy(cfg, bestScheme, demand);
@@ -401,6 +447,7 @@ annualEnergyKwh = [
     estimateAnnualEnergy(cfg, baseline, representativeLoad, demand, loadProfileKw)
     estimateAnnualEnergy(cfg, bestScheme, representativeLoad, demand, loadProfileKw)
 ];
+% Break down annual energy to explain why lifecycle cost changes.
 [~, baselineEnergyBreakdown] = hvac_estimate_annual_energy_detailed(cfg, baseline, loadProfileKw, demand);
 [~, optimizedEnergyBreakdown] = hvac_estimate_annual_energy_detailed(cfg, bestScheme, loadProfileKw, demand);
 annualChillerEnergyKwh = [
@@ -435,6 +482,7 @@ evaluationTable = table(scheme, totalCoolingCapacityKw, lifecycleCost, redundanc
 end
 
 function redundancy = calculateCompositeRedundancy(~, scheme, demand)
+%CALCULATECOMPOSITEREDUNDANCY Average subsystem redundancy into one objective.
 coolingRedundancy = (scheme.totalCoolingCapacityKw - demand.chillerDemandKw) / demand.chillerDemandKw;
 fanRedundancy = (scheme.totalFanCapacityKw - demand.fanDemandKw) / demand.fanDemandKw;
 pumpRedundancy = (scheme.totalPumpCapacityKw - demand.pumpDemandKw) / demand.pumpDemandKw;
@@ -444,6 +492,7 @@ redundancy = mean([coolingRedundancy, fanRedundancy, pumpRedundancy, ahuRedundan
 end
 
 function redundancyTable = compareSubsystemRedundancy(~, baseline, bestScheme, demand)
+%COMPARESUBSYSTEMREDUNDANCY Show capacity margin by equipment subsystem.
 subsystem = ["chiller"; "fan"; "pump"; "ahu"];
 demandValue = [
     demand.chillerDemandKw
@@ -471,6 +520,7 @@ redundancyTable = table(subsystem, demandValue, baselineCapacity, optimizedCapac
 end
 
 function scenarioTable = buildScenarioCapacityCheck(cfg, scheme, scenarioDemand)
+%BUILDSCENARIOCAPACITYCHECK Verify one selected scheme against all demand scenarios.
 scenarioNames = cfg.scenarioNames(:);
 scenario = strings(numel(scenarioNames) * 4, 1);
 subsystem = strings(numel(scenarioNames) * 4, 1);
@@ -490,6 +540,7 @@ for i = 1:numel(scenarioNames)
     factors = [cfg.chillerSafetyFactor; cfg.fanSafetyFactor; cfg.pumpSafetyFactor; cfg.ahuSafetyFactor];
 
     for j = 1:numel(names)
+        % Required capacity includes the subsystem-specific safety factor.
         row = row + 1;
         scenario(row) = scenarioNames(i);
         subsystem(row) = names(j);
@@ -507,6 +558,7 @@ scenarioTable = table(scenario, subsystem, demandValue, safetyFactor, ...
 end
 
 function checkTable = buildEngineeringConstraintCheck(cfg, scheme, demand, representativeLoad)
+%BUILDENGINEERINGCONSTRAINTCHECK Convert optimization constraints into a readable table.
 constraintName = [
     "prediction_error_margin"
     "minimum_typical_chiller_plr"
@@ -574,10 +626,12 @@ checkTable = table(constraintName, actualValue, requiredMin, requiredMax, pass, 
 end
 
 function plotStep4Figures(cfg, optimizationResult)
+%PLOTSTEP4FIGURES Export Pareto-front and baseline-vs-optimized comparison charts.
 if ~(cfg.showFigures || cfg.saveFigures)
     return;
 end
 
+% Pareto front: lower lifecycle cost and lower redundancy are preferred.
 fig1 = figure("Name", "Step 4 - Pareto Front", "Visible", figureVisibility(cfg));
 scatter(optimizationResult.paretoObjective(:, 1) / 10000, ...
     optimizationResult.paretoObjective(:, 2) * 100, 45, "filled");
@@ -587,6 +641,7 @@ title("Pareto Front of Capacity Optimization");
 grid on;
 saveFigureIfNeeded(cfg, fig1, "step4_pareto_front.png");
 
+% Side-by-side comparison of the two headline optimization indicators.
 fig2 = figure("Name", "Step 4 - Scheme Comparison", "Visible", figureVisibility(cfg));
 tiledlayout(1, 2);
 nexttile;
@@ -605,6 +660,7 @@ saveFigureIfNeeded(cfg, fig2, "step4_scheme_comparison.png");
 end
 
 function visible = figureVisibility(cfg)
+%FIGUREVISIBILITY Convert the showFigures flag to MATLAB's figure Visible value.
 if cfg.showFigures
     visible = "on";
 else
@@ -613,6 +669,7 @@ end
 end
 
 function saveFigureIfNeeded(cfg, fig, fileName)
+%SAVEFIGUREIFNEEDED Write PNG figures only when cfg.saveFigures is enabled.
 if cfg.saveFigures
     ensureFigureDir(cfg);
     filePath = fullfile(cfg.figureDir, fileName);
@@ -628,6 +685,7 @@ end
 end
 
 function ensureFigureDir(cfg)
+%ENSUREFIGUREDIR Create the figure output folder for direct step execution.
 if ~exist(cfg.figureDir, "dir")
     mkdir(cfg.figureDir);
 end
