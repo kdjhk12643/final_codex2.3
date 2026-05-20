@@ -5,10 +5,20 @@ stepTimer = tic;
 fprintf("  Step 4.1 Loading design load from LSTM full prediction...\n");
 optimizationScenarioName = cfg.optimizationScenarioName;
 demand = predictionResult.scenarioDemand.(optimizationScenarioName);
+rawDemand = demand;
+predictionErrorMarginKw = predictionResult.metricsLSTM.RMSE * cfg.predictionErrorRmseFactor;
+demand = applyPredictionErrorMargin(cfg, demand, predictionErrorMarginKw);
 designLoad = demand.totalCoolingLoadKw;
 representativeLoad = predictionResult.representativeLoadKw;
+if isfield(predictionResult, "predictedProfile") && isfield(predictionResult.predictedProfile, "totalCoolingLoadKw")
+    loadProfileKw = predictionResult.predictedProfile.totalCoolingLoadKw;
+else
+    loadProfileKw = representativeLoad;
+end
 fprintf("  Design load = %.2f kW (%s, P%.0f total load from LSTM full prediction).\n", ...
     designLoad, optimizationScenarioName, demand.quantile * 100);
+fprintf("  Prediction error margin = %.2f kW (%.1f x LSTM RMSE); raw design load = %.2f kW.\n", ...
+    predictionErrorMarginKw, cfg.predictionErrorRmseFactor, rawDemand.totalCoolingLoadKw);
 fprintf("  Representative load = %.2f kW (mean of predicted profile).\n", representativeLoad);
 fprintf("  Subsystem design demands: chiller=%.2f kW, fan=%.2f kW, pump=%.2f kW, AHU=%.0f m3/h.\n", ...
     demand.chillerDemandKw, demand.fanDemandKw, demand.pumpDemandKw, demand.ahuDemand);
@@ -17,6 +27,8 @@ optimizationResult = struct();
 optimizationResult.designLoadKw = designLoad;
 optimizationResult.representativeLoadKw = representativeLoad;
 optimizationResult.designDemand = demand;
+optimizationResult.rawDesignDemand = rawDemand;
+optimizationResult.predictionErrorMarginKw = predictionErrorMarginKw;
 fprintf("  Step 4.2 Building baseline scheme...\n");
 optimizationResult.baselineScheme = buildBaselineScheme(cfg, demand);
 fprintf("  Baseline cooling capacity = %.2f kW, redundancy = %.2f%%.\n", ...
@@ -25,7 +37,7 @@ fprintf("  Baseline cooling capacity = %.2f kW, redundancy = %.2f%%.\n", ...
 
 fprintf("  Step 4.3 Running capacity optimization, population=%d, generations=%d...\n", ...
     cfg.populationSize, cfg.maxGenerations);
-[paretoSet, paretoObjective] = solveCapacityOptimization(cfg, demand, representativeLoad);
+[paretoSet, paretoObjective] = solveCapacityOptimization(cfg, demand, representativeLoad, loadProfileKw);
 [paretoObjective, uniqueIdx] = unique(paretoObjective, "rows", "stable");
 paretoSet = paretoSet(uniqueIdx, :);
 [paretoSet, paretoObjective] = limitParetoSetToTargetBand(paretoSet, paretoObjective);
@@ -38,21 +50,34 @@ optimizationResult.paretoSet = paretoSet;
 optimizationResult.paretoObjective = paretoObjective;
 optimizationResult.bestScheme = decodeScheme(cfg, bestScheme);
 optimizationResult.topsisTable = topsisTable;
-optimizationResult.evaluationTable = compareSchemes(cfg, optimizationResult.baselineScheme, optimizationResult.bestScheme, demand, representativeLoad);
+optimizationResult.evaluationTable = compareSchemes(cfg, optimizationResult.baselineScheme, optimizationResult.bestScheme, demand, representativeLoad, loadProfileKw);
 optimizationResult.subsystemRedundancyTable = compareSubsystemRedundancy(cfg, optimizationResult.baselineScheme, optimizationResult.bestScheme, demand);
 optimizationResult.scenarioCapacityCheck = buildScenarioCapacityCheck(cfg, optimizationResult.bestScheme, predictionResult.scenarioDemand);
+optimizationResult.engineeringConstraintCheck = buildEngineeringConstraintCheck(cfg, optimizationResult.bestScheme, demand, representativeLoad);
 optimizationResult.analysisSummary = struct( ...
     "bestK", analysisResult.bestK, ...
-    "selectedFeatureCount", numel(analysisResult.selectedFeatures));
+    "selectedFeatureCount", numel(analysisResult.selectedFeatures), ...
+    "clusterSilhouette", analysisResult.silhouetteTable.meanSilhouette);
+optimizationResult.researchLinkageTable = build_research_linkage_table(cfg, predictionResult, optimizationResult);
+[optimizationResult.sensitivityTable, optimizationResult.engineeringBoundaryTable] = ...
+    analyze_capacity_sensitivity(cfg, optimizationResult);
 
 topsisFile = fullfile(cfg.tableDir, "step4_topsis_ranking.csv");
 evaluationFile = fullfile(cfg.tableDir, "step4_scheme_evaluation.csv");
 subsystemFile = fullfile(cfg.tableDir, "step4_subsystem_redundancy.csv");
 scenarioCheckFile = fullfile(cfg.tableDir, "step4_scenario_capacity_check.csv");
+engineeringConstraintFile = fullfile(cfg.tableDir, "step4_engineering_constraint_check.csv");
+linkageFile = fullfile(cfg.tableDir, "step4_research_linkage.csv");
+sensitivityFile = fullfile(cfg.tableDir, "step4_sensitivity_analysis.csv");
+boundaryFile = fullfile(cfg.tableDir, "step4_engineering_boundary.csv");
 writetable(optimizationResult.topsisTable, topsisFile);
 writetable(optimizationResult.evaluationTable, evaluationFile);
 writetable(optimizationResult.subsystemRedundancyTable, subsystemFile);
 writetable(optimizationResult.scenarioCapacityCheck, scenarioCheckFile);
+writetable(optimizationResult.engineeringConstraintCheck, engineeringConstraintFile);
+writetable(optimizationResult.researchLinkageTable, linkageFile);
+writetable(optimizationResult.sensitivityTable, sensitivityFile);
+writetable(optimizationResult.engineeringBoundaryTable, boundaryFile);
 
 plotStep4Figures(cfg, optimizationResult);
 
@@ -63,7 +88,29 @@ fprintf("  Saved: %s\n", topsisFile);
 fprintf("  Saved: %s\n", evaluationFile);
 fprintf("  Saved: %s\n", subsystemFile);
 fprintf("  Saved: %s\n", scenarioCheckFile);
+fprintf("  Saved: %s\n", engineeringConstraintFile);
+fprintf("  Saved: %s\n", linkageFile);
+fprintf("  Saved: %s\n", sensitivityFile);
+fprintf("  Saved: %s\n", boundaryFile);
 fprintf("  Step 4 finished in %.1f seconds.\n", toc(stepTimer));
+end
+
+function demandOut = applyPredictionErrorMargin(cfg, demandIn, predictionErrorMarginKw)
+demandOut = demandIn;
+if predictionErrorMarginKw <= 0
+    return;
+end
+
+totalBase = max(demandIn.totalCoolingLoadKw, eps);
+fanPerCoolingKw = demandIn.fanDemandKw / totalBase;
+pumpPerCoolingKw = demandIn.pumpDemandKw / totalBase;
+
+demandOut.predictionErrorMarginKw = predictionErrorMarginKw;
+demandOut.totalCoolingLoadKw = demandIn.totalCoolingLoadKw + predictionErrorMarginKw;
+demandOut.chillerDemandKw = demandIn.chillerDemandKw + predictionErrorMarginKw;
+demandOut.fanDemandKw = demandIn.fanDemandKw + predictionErrorMarginKw * fanPerCoolingKw;
+demandOut.pumpDemandKw = demandIn.pumpDemandKw + predictionErrorMarginKw * pumpPerCoolingKw;
+demandOut.ahuDemand = demandIn.ahuDemand + predictionErrorMarginKw * cfg.ahuAirflowPerKw;
 end
 
 function [paretoSet, paretoObjective] = limitParetoSetToTargetBand(paretoSet, paretoObjective)
@@ -107,7 +154,7 @@ baseline.totalFanCapacityKw = baseline.fanCapacityKw * baseline.fanCount;
 baseline.totalPumpCapacityKw = baseline.pumpCapacityKw * baseline.pumpCount;
 baseline.totalAhuAirflow = baseline.ahuAirflow * baseline.ahuCount;
 baseline.redundancyRate = calculateCompositeRedundancy(cfg, baseline, demand);
-baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, demand.totalCoolingLoadKw, demand);
+baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, demand.totalCoolingLoadKw, demand, demand.totalCoolingLoadKw);
 end
 
 function [unitCapacity, count] = chooseBaselinePair(capacityList, countRange, targetCapacity)
@@ -127,7 +174,7 @@ for candidateCount = countRange
 end
 end
 
-function [paretoSet, paretoObjective] = solveCapacityOptimization(cfg, demand, representativeLoad)
+function [paretoSet, paretoObjective] = solveCapacityOptimization(cfg, demand, representativeLoad, loadProfileKw)
 hasGamultiobj = exist("gamultiobj", "file") == 2;
 
 if hasGamultiobj
@@ -146,47 +193,69 @@ if hasGamultiobj
         "MaxGenerations", cfg.maxGenerations, ...
         "Display", "iter");
 
-    objective = @(x) capacityObjectives(cfg, round(x), demand, representativeLoad);
-    constraint = @(x) capacityConstraints(cfg, round(x), demand);
+    objective = @(x) capacityObjectives(cfg, round(x), demand, representativeLoad, loadProfileKw);
+    constraint = @(x) capacityConstraints(cfg, round(x), demand, representativeLoad);
     [paretoSet, paretoObjective] = gamultiobj(objective, nvars, [], [], [], [], lb, ub, constraint, options);
     paretoSet = round(paretoSet);
-    [discreteSet, discreteObjective] = enumerateDiscretePareto(cfg, demand, representativeLoad);
+    [discreteSet, discreteObjective] = enumerateDiscretePareto(cfg, demand, representativeLoad, loadProfileKw);
     paretoSet = [paretoSet; discreteSet];
     paretoObjective = [paretoObjective; discreteObjective];
 else
     fprintf("    gamultiobj not detected. Using fallback grid search.\n");
-    [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, demand, representativeLoad);
+    [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, demand, representativeLoad, loadProfileKw);
 end
 end
 
-function f = capacityObjectives(cfg, x, demand, representativeLoad)
+function f = capacityObjectives(cfg, x, demand, representativeLoad, loadProfileKw)
 scheme = decodeScheme(cfg, x);
 scheme.totalCoolingCapacityKw = scheme.chillerCapacityKw * scheme.chillerCount;
 scheme.totalFanCapacityKw = scheme.fanCapacityKw * scheme.fanCount;
 scheme.totalPumpCapacityKw = scheme.pumpCapacityKw * scheme.pumpCount;
 scheme.totalAhuAirflow = scheme.ahuAirflow * scheme.ahuCount;
 scheme.redundancyRate = calculateCompositeRedundancy(cfg, scheme, demand);
-scheme.lifecycleCost = estimateLifecycleCost(cfg, scheme, representativeLoad, demand);
+scheme.lifecycleCost = estimateLifecycleCost(cfg, scheme, representativeLoad, demand, loadProfileKw);
 f = [scheme.lifecycleCost, scheme.redundancyRate];
 end
 
-function [c, ceq] = capacityConstraints(cfg, x, demand)
+function [c, ceq] = capacityConstraints(cfg, x, demand, representativeLoad)
 scheme = decodeScheme(cfg, x);
 totalCoolingCapacity = scheme.chillerCapacityKw * scheme.chillerCount;
 totalFanCapacity = scheme.fanCapacityKw * scheme.fanCount;
 totalPumpCapacity = scheme.pumpCapacityKw * scheme.pumpCount;
 totalAhuAirflow = scheme.ahuAirflow * scheme.ahuCount;
 
+extremeMarginFactor = 1 + cfg.minExtremeCapacityMargin;
+typicalChillerPLR = representativeLoad / max(totalCoolingCapacity, eps);
+minimumPLRConstraint = cfg.minTypicalChillerPLR - typicalChillerPLR;
+matchingConstraints = buildMatchingConstraints(cfg, totalCoolingCapacity, totalFanCapacity, totalPumpCapacity, totalAhuAirflow);
+
 c = [
-    cfg.chillerSafetyFactor * demand.chillerDemandKw - totalCoolingCapacity
-    cfg.fanSafetyFactor * demand.fanDemandKw - totalFanCapacity
-    cfg.pumpSafetyFactor * demand.pumpDemandKw - totalPumpCapacity
-    cfg.ahuSafetyFactor * demand.ahuDemand - totalAhuAirflow
+    cfg.chillerSafetyFactor * demand.chillerDemandKw * extremeMarginFactor - totalCoolingCapacity
+    cfg.fanSafetyFactor * demand.fanDemandKw * extremeMarginFactor - totalFanCapacity
+    cfg.pumpSafetyFactor * demand.pumpDemandKw * extremeMarginFactor - totalPumpCapacity
+    cfg.ahuSafetyFactor * demand.ahuDemand * extremeMarginFactor - totalAhuAirflow
+    minimumPLRConstraint
+    matchingConstraints
 ];
 ceq = [];
 end
 
-function [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, demand, representativeLoad)
+function c = buildMatchingConstraints(cfg, totalCoolingCapacity, totalFanCapacity, totalPumpCapacity, totalAhuAirflow)
+fanRatio = totalFanCapacity / max(totalCoolingCapacity, eps);
+pumpRatio = totalPumpCapacity / max(totalCoolingCapacity, eps);
+ahuRatio = totalAhuAirflow / max(totalCoolingCapacity, eps);
+
+c = [
+    cfg.fanCoolingCapacityRatioRange(1) - fanRatio
+    fanRatio - cfg.fanCoolingCapacityRatioRange(2)
+    cfg.pumpCoolingCapacityRatioRange(1) - pumpRatio
+    pumpRatio - cfg.pumpCoolingCapacityRatioRange(2)
+    cfg.ahuAirflowPerCoolingKwRange(1) - ahuRatio
+    ahuRatio - cfg.ahuAirflowPerCoolingKwRange(2)
+];
+end
+
+function [paretoSet, paretoObjective] = enumerateDiscretePareto(cfg, demand, representativeLoad, loadProfileKw)
 candidateSet = [];
 candidateObj = [];
 
@@ -200,9 +269,9 @@ for i = 1:size(coolingOptions, 1)
         for k = 1:size(pumpOptions, 1)
             for m = 1:size(ahuOptions, 1)
                 x = [coolingOptions(i, :), fanOptions(j, :), pumpOptions(k, :), ahuOptions(m, :)];
-                [c, ~] = capacityConstraints(cfg, x, demand);
+                [c, ~] = capacityConstraints(cfg, x, demand, representativeLoad);
                 if all(c <= 0)
-                    f = capacityObjectives(cfg, x, demand, representativeLoad);
+                    f = capacityObjectives(cfg, x, demand, representativeLoad, loadProfileKw);
                     candidateSet = [candidateSet; x]; %#ok<AGROW>
                     candidateObj = [candidateObj; f]; %#ok<AGROW>
                 end
@@ -298,30 +367,27 @@ initialCost = ...
     scheme.ahuAirflow * scheme.ahuCount * cfg.ahuUnitCostPerAirflow;
 end
 
-function annualEnergy = estimateAnnualEnergy(~, scheme, representativeLoad, demand)
-loadRatio = representativeLoad / max(scheme.totalCoolingCapacityKw, eps);
-compositeRedundancy = calculateCompositeRedundancy([], scheme, demand);
-stagingBenefit = 0.045 * min(max(scheme.chillerCount - 1, 0), 2);
-oversizePenalty = 0.90 * max(compositeRedundancy - 0.10, 0);
-partLoadPenalty = 1 + 0.24 * max(loadRatio - 0.75, 0) + oversizePenalty - stagingBenefit;
-partLoadPenalty = max(partLoadPenalty, 0.82);
-annualEnergy = representativeLoad * partLoadPenalty * 24 * 120;
+function annualEnergy = estimateAnnualEnergy(cfg, scheme, representativeLoad, demand, loadProfileKw)
+if nargin < 5 || isempty(loadProfileKw)
+    loadProfileKw = representativeLoad;
+end
+annualEnergy = hvac_estimate_annual_energy_detailed(cfg, scheme, loadProfileKw, demand);
 end
 
-function lifecycleCost = estimateLifecycleCost(cfg, scheme, representativeLoad, demand)
+function lifecycleCost = estimateLifecycleCost(cfg, scheme, representativeLoad, demand, loadProfileKw)
 initialCost = estimateInitialCost(cfg, scheme);
-annualEnergy = estimateAnnualEnergy(cfg, scheme, representativeLoad, demand);
+annualEnergy = estimateAnnualEnergy(cfg, scheme, representativeLoad, demand, loadProfileKw);
 annualOperatingCost = annualEnergy * cfg.electricityPrice;
 presentWorthFactor = (1 - (1 + cfg.discountRate) ^ (-cfg.lifeYears)) / cfg.discountRate;
 maintenanceCost = initialCost * cfg.maintenanceRate * presentWorthFactor;
 lifecycleCost = initialCost + annualOperatingCost * presentWorthFactor + maintenanceCost;
 end
 
-function evaluationTable = compareSchemes(cfg, baseline, bestScheme, demand, representativeLoad)
-baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, representativeLoad, demand);
+function evaluationTable = compareSchemes(cfg, baseline, bestScheme, demand, representativeLoad, loadProfileKw)
+baseline.lifecycleCost = estimateLifecycleCost(cfg, baseline, representativeLoad, demand, loadProfileKw);
 baseline.redundancyRate = calculateCompositeRedundancy(cfg, baseline, demand);
 bestScheme.redundancyRate = calculateCompositeRedundancy(cfg, bestScheme, demand);
-bestScheme.lifecycleCost = estimateLifecycleCost(cfg, bestScheme, representativeLoad, demand);
+bestScheme.lifecycleCost = estimateLifecycleCost(cfg, bestScheme, representativeLoad, demand, loadProfileKw);
 
 scheme = ["baseline"; "optimized"];
 totalCoolingCapacityKw = [baseline.totalCoolingCapacityKw; bestScheme.totalCoolingCapacityKw];
@@ -332,8 +398,30 @@ initialCost = [
     estimateInitialCost(cfg, bestScheme)
 ];
 annualEnergyKwh = [
-    estimateAnnualEnergy(cfg, baseline, representativeLoad, demand)
-    estimateAnnualEnergy(cfg, bestScheme, representativeLoad, demand)
+    estimateAnnualEnergy(cfg, baseline, representativeLoad, demand, loadProfileKw)
+    estimateAnnualEnergy(cfg, bestScheme, representativeLoad, demand, loadProfileKw)
+];
+[~, baselineEnergyBreakdown] = hvac_estimate_annual_energy_detailed(cfg, baseline, loadProfileKw, demand);
+[~, optimizedEnergyBreakdown] = hvac_estimate_annual_energy_detailed(cfg, bestScheme, loadProfileKw, demand);
+annualChillerEnergyKwh = [
+    baselineEnergyBreakdown.chillerKwh
+    optimizedEnergyBreakdown.chillerKwh
+];
+annualFanEnergyKwh = [
+    baselineEnergyBreakdown.fanKwh
+    optimizedEnergyBreakdown.fanKwh
+];
+annualPumpEnergyKwh = [
+    baselineEnergyBreakdown.pumpKwh
+    optimizedEnergyBreakdown.pumpKwh
+];
+meanChillerPLR = [
+    baselineEnergyBreakdown.meanChillerPLR
+    optimizedEnergyBreakdown.meanChillerPLR
+];
+meanCOP = [
+    baselineEnergyBreakdown.meanCOP
+    optimizedEnergyBreakdown.meanCOP
 ];
 
 costReductionRate = [0; (baseline.lifecycleCost - bestScheme.lifecycleCost) / baseline.lifecycleCost];
@@ -341,7 +429,9 @@ redundancyReductionRate = [0; (baseline.redundancyRate - bestScheme.redundancyRa
 energySavingRate = [0; (annualEnergyKwh(1) - annualEnergyKwh(2)) / annualEnergyKwh(1)];
 
 evaluationTable = table(scheme, totalCoolingCapacityKw, lifecycleCost, redundancyRate, ...
-    initialCost, annualEnergyKwh, costReductionRate, redundancyReductionRate, energySavingRate);
+    initialCost, annualEnergyKwh, annualChillerEnergyKwh, annualFanEnergyKwh, ...
+    annualPumpEnergyKwh, meanChillerPLR, meanCOP, costReductionRate, ...
+    redundancyReductionRate, energySavingRate);
 end
 
 function redundancy = calculateCompositeRedundancy(~, scheme, demand)
@@ -414,6 +504,73 @@ end
 
 scenarioTable = table(scenario, subsystem, demandValue, safetyFactor, ...
     requiredCapacity, capacity, marginRate, pass);
+end
+
+function checkTable = buildEngineeringConstraintCheck(cfg, scheme, demand, representativeLoad)
+constraintName = [
+    "prediction_error_margin"
+    "minimum_typical_chiller_plr"
+    "minimum_extreme_capacity_margin_chiller"
+    "minimum_extreme_capacity_margin_fan"
+    "minimum_extreme_capacity_margin_pump"
+    "minimum_extreme_capacity_margin_ahu"
+    "fan_cooling_capacity_ratio"
+    "pump_cooling_capacity_ratio"
+    "ahu_airflow_per_cooling_kw"
+];
+
+actualValue = zeros(numel(constraintName), 1);
+requiredMin = nan(numel(constraintName), 1);
+requiredMax = nan(numel(constraintName), 1);
+pass = false(numel(constraintName), 1);
+note = strings(numel(constraintName), 1);
+
+extremeMarginFactor = 1 + cfg.minExtremeCapacityMargin;
+requiredCooling = demand.chillerDemandKw * cfg.chillerSafetyFactor * extremeMarginFactor;
+requiredFan = demand.fanDemandKw * cfg.fanSafetyFactor * extremeMarginFactor;
+requiredPump = demand.pumpDemandKw * cfg.pumpSafetyFactor * extremeMarginFactor;
+requiredAhu = demand.ahuDemand * cfg.ahuSafetyFactor * extremeMarginFactor;
+
+fanRatio = scheme.totalFanCapacityKw / max(scheme.totalCoolingCapacityKw, eps);
+pumpRatio = scheme.totalPumpCapacityKw / max(scheme.totalCoolingCapacityKw, eps);
+ahuRatio = scheme.totalAhuAirflow / max(scheme.totalCoolingCapacityKw, eps);
+typicalPLR = representativeLoad / max(scheme.totalCoolingCapacityKw, eps);
+
+actualValue(1) = demand.predictionErrorMarginKw;
+requiredMin(1) = 0;
+pass(1) = actualValue(1) >= requiredMin(1);
+note(1) = "P99 demand is increased by LSTM RMSE margin before capacity optimization";
+
+actualValue(2) = typicalPLR;
+requiredMin(2) = cfg.minTypicalChillerPLR;
+pass(2) = actualValue(2) >= requiredMin(2);
+note(2) = "Avoids selecting a cooling capacity that is too oversized for representative load";
+
+actualValue(3:6) = [
+    (scheme.totalCoolingCapacityKw - requiredCooling) / requiredCooling
+    (scheme.totalFanCapacityKw - requiredFan) / requiredFan
+    (scheme.totalPumpCapacityKw - requiredPump) / requiredPump
+    (scheme.totalAhuAirflow - requiredAhu) / requiredAhu
+];
+requiredMin(3:6) = cfg.minExtremeCapacityMargin;
+pass(3:6) = actualValue(3:6) >= requiredMin(3:6);
+note(3:6) = "Capacity must retain explicit margin after safety factors and prediction-error correction";
+
+actualValue(7:9) = [fanRatio; pumpRatio; ahuRatio];
+requiredMin(7:9) = [
+    cfg.fanCoolingCapacityRatioRange(1)
+    cfg.pumpCoolingCapacityRatioRange(1)
+    cfg.ahuAirflowPerCoolingKwRange(1)
+];
+requiredMax(7:9) = [
+    cfg.fanCoolingCapacityRatioRange(2)
+    cfg.pumpCoolingCapacityRatioRange(2)
+    cfg.ahuAirflowPerCoolingKwRange(2)
+];
+pass(7:9) = actualValue(7:9) >= requiredMin(7:9) & actualValue(7:9) <= requiredMax(7:9);
+note(7:9) = "Keeps airside, waterside, and AHU capacity matched with cooling capacity";
+
+checkTable = table(constraintName, actualValue, requiredMin, requiredMax, pass, note);
 end
 
 function plotStep4Figures(cfg, optimizationResult)

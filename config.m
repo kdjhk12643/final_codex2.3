@@ -86,6 +86,18 @@ cfg.lifeYears = 15;
 cfg.discountRate = 0.05;
 cfg.coolingSeasonDays = 120;
 
+% Engineering energy model assumptions
+cfg.chillerRatedCOP = 5.2;
+cfg.chillerMinPLR = 0.25;
+cfg.chillerPLRCurve = [0.25, 0.50, 0.75, 1.00; 0.78, 0.92, 1.00, 0.96];
+cfg.vfdExponent = 2.6;
+cfg.minTypicalChillerPLR = 0.28;
+cfg.minExtremeCapacityMargin = 0.03;
+cfg.predictionErrorRmseFactor = 1.0;
+cfg.fanCoolingCapacityRatioRange = [0.05, 0.09];
+cfg.pumpCoolingCapacityRatioRange = [0.045, 0.08];
+cfg.ahuAirflowPerCoolingKwRange = [260, 360];
+
 % Equipment candidates. Units are kW unless noted otherwise.
 cfg.chillerCapacityList = [100, 120, 140, 150, 160, 180, 200, 220, 240, 250, 280, 300, 320, 350, 380];
 cfg.chillerCountRange = 1:4;

@@ -1,0 +1,10 @@
+constraintName,actualValue,requiredMin,requiredMax,pass,note
+prediction_error_margin,9.4740629196167,0,NaN,1,"P99 demand is increased by LSTM RMSE margin before capacity optimization"
+minimum_typical_chiller_plr,0.333177179098129,0.28,NaN,1,"Avoids selecting a cooling capacity that is too oversized for representative load"
+minimum_extreme_capacity_margin_chiller,0.0230419635772705,0.03,NaN,0,"Capacity must retain explicit margin after safety factors and prediction-error correction"
+minimum_extreme_capacity_margin_fan,0.0495299585163593,0.03,NaN,1,"Capacity must retain explicit margin after safety factors and prediction-error correction"
+minimum_extreme_capacity_margin_pump,0.00579776847735047,0.03,NaN,0,"Capacity must retain explicit margin after safety factors and prediction-error correction"
+minimum_extreme_capacity_margin_ahu,0.0252373330295086,0.03,NaN,0,"Capacity must retain explicit margin after safety factors and prediction-error correction"
+fan_cooling_capacity_ratio,0.0666666666666667,0.05,0.09,1,"Keeps airside, waterside, and AHU capacity matched with cooling capacity"
+pump_cooling_capacity_ratio,0.0583333333333333,0.045,0.08,1,"Keeps airside, waterside, and AHU capacity matched with cooling capacity"
+ahu_airflow_per_cooling_kw,281.25,260,360,1,"Keeps airside, waterside, and AHU capacity matched with cooling capacity"

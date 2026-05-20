@@ -1,0 +1,7 @@
+engineeringBoundary,currentTreatment,neededForDetailedDesign
+data_source,"Uses the modeled annual station dataset to verify the method chain","Measured BMS, AFC passenger flow, and meteorological data calibration"
+subsystem_conversion,"Maps total load to chiller, fan, pump, and AHU demand with regression and engineering ratios","Psychrometric calculation, fresh-air standard check, and equipment schedule verification"
+hydraulic_and_airside_design,"Checks installed capacity and safety margin; does not solve duct pressure, pump head, or pipe network balance","Full air/water-side resistance calculation and balancing check"
+equipment_performance,"Uses simplified COP/PLR and VFD curves rather than manufacturer-specific selection data","Manufacturer catalog curves, minimum PLR, standby logic, and maintenance constraints"
+control_and_comfort,"Evaluates capacity and energy, not closed-loop temperature, humidity, CO2, or passenger comfort control","Dynamic control simulation and compliance check against indoor environmental standards"
+final_design_use,"Suitable for thesis-level method validation and preliminary scheme comparison","Design institute review, code compliance, and project-specific equipment selection"

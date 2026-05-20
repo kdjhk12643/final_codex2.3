@@ -1,0 +1,6 @@
+sensitivityType,currentSetting,expectedInfluence,recommendedCheck,riskLevel
+design_quantile,"capacity scenario=extreme, quantile=P99",Raising P95 to P99 increases required installed capacity and reduces undersizing risk,"Report P50/P95/P99 demand table and explain why P99 is selected for optimization",medium
+safety_factor,"chiller 1.09, fan 1.07, pump 1.07, AHU 1.05",Higher safety factors increase reliability but weaken redundancy and cost reduction,"Re-run with +/- 0.02 safety-factor changes before construction-level design",medium
+topsis_weight,"cost 0.55, redundancy 0.45",Higher cost weight favors cheaper schemes; higher redundancy weight favors tighter capacity,"Compare 0.50/0.50, 0.55/0.45, and 0.70/0.30 rankings if the recommended scheme is disputed",medium
+electricity_price,"0.85 yuan/kWh",Higher electricity price increases the value of efficient part-load operation,"Use local tariff and operating schedule when converting thesis results to a project estimate",low
+prediction_error,"LSTM RMSE should be compared with 6.06% minimum extreme margin",Positive prediction bias oversizes equipment; negative peak-load error can erode safety margin,"Reserve additional engineering margin or calibrate with measured peak data before final equipment selection",high

@@ -6,6 +6,9 @@ predictionResult = struct();
 
 selectedFeatures = string(analysisResult.selectedFeatures);
 selectedFeatures = selectedFeatures(ismember(selectedFeatures, string(featureData.Properties.VariableNames)));
+clusterFeatureName = "cluster_label_zscore";
+featureDataWithCluster = addClusterLabelFeature(cfg, featureData, analysisResult, clusterFeatureName);
+selectedFeaturesWithCluster = unique([selectedFeatures; clusterFeatureName], "stable");
 
 fprintf("  Step 3.1 Building prediction matrix with %d selected features...\n", numel(selectedFeatures));
 [X, y] = buildMatrix(featureData, selectedFeatures, cfg.targetName);
@@ -14,6 +17,8 @@ fprintf("  Samples: total=%d, train=%d, val=%d, test=%d.\n", ...
     numel(y), numel(split.train), numel(split.val), numel(split.test));
 
 predictionResult.selectedFeatures = selectedFeatures;
+predictionResult.clusterFeatureName = clusterFeatureName;
+predictionResult.selectedFeaturesWithCluster = selectedFeaturesWithCluster;
 predictionResult.split = split;
 
 fprintf("  Step 3.2 Building LSTM sequences, sequence length = %d...\n", cfg.sequenceLength);
@@ -41,10 +46,14 @@ predictionResult.yTestLSTM = ySeq(seqSplit.test);
 predictionResult.yPredLSTM = predictionResult.lstm.yPredTest;
 predictionResult.metricsLSTM = calculateMetrics(cfg, predictionResult.yTestLSTM, predictionResult.yPredLSTM);
 
-fprintf("  Step 3.5 Generating full predicted load profile for capacity optimization...\n");
+fprintf("  Step 3.5 Running cluster-label ablation experiment...\n");
+predictionResult.clusterAblation = runClusterAblation( ...
+    cfg, featureDataWithCluster, selectedFeatures, selectedFeaturesWithCluster, cfg.targetName);
+
+fprintf("  Step 3.6 Generating full predicted load profile for capacity optimization...\n");
 predictionResult = generateLoadProfile(cfg, predictionResult, X, y);
 
-fprintf("  Step 3.6 Training subsystem regression models (chiller, fan, pump, AHU)...\n");
+fprintf("  Step 3.7 Training subsystem regression models (chiller, fan, pump, AHU)...\n");
 subsystemModels = trainSubsystemModels(cfg, dataClean);
 fprintf("    Chiller: %.4f × total_load + %.2f  (R²=%.3f)\n", ...
     subsystemModels.chiller.Coefficients.Estimate(2), ...
@@ -59,10 +68,10 @@ fprintf("    Pump:    %.4f × total_load + %.2f  (R²=%.3f)\n", ...
     subsystemModels.pump.Coefficients.Estimate(1), ...
     subsystemModels.pump.Rsquared.Ordinary);
 
-fprintf("  Step 3.7 Predicting subsystem load profiles from LSTM prediction...\n");
+fprintf("  Step 3.8 Predicting subsystem load profiles from LSTM prediction...\n");
 predictionResult = predictSubsystemProfiles(cfg, predictionResult, subsystemModels);
 
-fprintf("  Step 3.8 Building subsystem confidence demand and scenario tables...\n");
+fprintf("  Step 3.9 Building subsystem confidence demand and scenario tables...\n");
 predictionResult = buildSubsystemDemandOutputs(cfg, predictionResult);
 
 predictionResult.metrics = table( ...
@@ -74,9 +83,11 @@ predictionResult.metrics = table( ...
     'VariableNames', {'model', 'RMSE', 'MAE', 'MAPE', 'R2'});
 
 metricsFile = fullfile(cfg.tableDir, "step3_prediction_metrics.csv");
+ablationFile = fullfile(cfg.tableDir, "step3_cluster_ablation_metrics.csv");
 quantileFile = fullfile(cfg.tableDir, "step3_subsystem_demand_quantiles.csv");
 scenarioFile = fullfile(cfg.tableDir, "step3_scenario_demand.csv");
 writetable(predictionResult.metrics, metricsFile);
+writetable(predictionResult.clusterAblation, ablationFile);
 writetable(predictionResult.subsystemDemandQuantiles, quantileFile);
 writetable(predictionResult.scenarioDemandTable, scenarioFile);
 
@@ -89,9 +100,58 @@ fprintf("  BP metrics:   RMSE=%.3f, MAE=%.3f, MAPE=%.2f%%, R2=%.4f.\n", ...
     predictionResult.metricsBP.RMSE, predictionResult.metricsBP.MAE, ...
     predictionResult.metricsBP.MAPE, predictionResult.metricsBP.R2);
 fprintf("  Saved: %s\n", metricsFile);
+fprintf("  Saved: %s\n", ablationFile);
 fprintf("  Saved: %s\n", quantileFile);
 fprintf("  Saved: %s\n", scenarioFile);
 fprintf("  Step 3 finished in %.1f seconds.\n", toc(stepTimer));
+end
+
+function featureDataOut = addClusterLabelFeature(~, featureData, analysisResult, clusterFeatureName)
+featureDataOut = featureData;
+timestamps = featureDataOut.timestamp;
+dates = dateshift(timestamps, "start", "day");
+clusterValues = nan(height(featureDataOut), 1);
+
+for i = 1:numel(analysisResult.dailyDates)
+    idx = dates == analysisResult.dailyDates(i);
+    clusterValues(idx) = analysisResult.clusterLabel(i);
+end
+
+clusterValues = fillmissing(clusterValues, "nearest");
+clusterValues = fillmissing(clusterValues, "constant", mode(analysisResult.clusterLabel));
+sigma = std(clusterValues, "omitnan");
+if sigma == 0 || isnan(sigma)
+    featureDataOut.(clusterFeatureName) = zeros(height(featureDataOut), 1);
+else
+    featureDataOut.(clusterFeatureName) = (clusterValues - mean(clusterValues, "omitnan")) ./ sigma;
+end
+end
+
+function ablationTable = runClusterAblation(cfg, featureDataWithCluster, selectedFeatures, selectedFeaturesWithCluster, targetName)
+[XBase, yBase] = buildMatrix(featureDataWithCluster, selectedFeatures, targetName);
+[XCluster, yCluster] = buildMatrix(featureDataWithCluster, selectedFeaturesWithCluster, targetName);
+
+[XSeqBase, ySeqBase] = buildSequences(XBase, yBase, cfg.sequenceLength);
+[XSeqCluster, ySeqCluster] = buildSequences(XCluster, yCluster, cfg.sequenceLength);
+
+baseSplit = splitIndexes(numel(ySeqBase), cfg);
+clusterSplit = splitIndexes(numel(ySeqCluster), cfg);
+
+withoutCluster = trainLstmOrFallback(cfg, XSeqBase, ySeqBase, baseSplit);
+withCluster = trainLstmOrFallback(cfg, XSeqCluster, ySeqCluster, clusterSplit);
+
+metricsWithoutCluster = calculateMetrics(cfg, ySeqBase(baseSplit.test), withoutCluster.yPredTest);
+metricsWithCluster = calculateMetrics(cfg, ySeqCluster(clusterSplit.test), withCluster.yPredTest);
+
+model = ["lstm_without_cluster"; "lstm_with_cluster"];
+usesClusterLabel = [false; true];
+featureCount = [numel(selectedFeatures); numel(selectedFeaturesWithCluster)];
+RMSE = [metricsWithoutCluster.RMSE; metricsWithCluster.RMSE];
+MAE = [metricsWithoutCluster.MAE; metricsWithCluster.MAE];
+MAPE = [metricsWithoutCluster.MAPE; metricsWithCluster.MAPE];
+R2 = [metricsWithoutCluster.R2; metricsWithCluster.R2];
+
+ablationTable = table(model, usesClusterLabel, featureCount, RMSE, MAE, MAPE, R2);
 end
 
 function [X, y] = buildMatrix(featureData, selectedFeatures, targetName)
