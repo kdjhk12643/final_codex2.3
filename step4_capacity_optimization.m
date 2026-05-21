@@ -106,6 +106,7 @@ end
 function demandOut = applyPredictionErrorMargin(cfg, demandIn, predictionErrorMarginKw)
 %APPLYPREDICTIONERRORMARGIN 按 LSTM 误差裕量抬高设计需求。
 demandOut = demandIn;
+demandOut.predictionErrorMarginKw = max(predictionErrorMarginKw, 0);
 if predictionErrorMarginKw <= 0
     return;
 end
@@ -114,7 +115,6 @@ totalBase = max(demandIn.totalCoolingLoadKw, eps);
 fanPerCoolingKw = demandIn.fanDemandKw / totalBase;
 pumpPerCoolingKw = demandIn.pumpDemandKw / totalBase;
 
-demandOut.predictionErrorMarginKw = predictionErrorMarginKw;
 % 冷机需求直接叠加总冷负荷裕量；风机、水泵和 AHU 按当前需求与总冷负荷的比例折算。
 demandOut.totalCoolingLoadKw = demandIn.totalCoolingLoadKw + predictionErrorMarginKw;
 demandOut.chillerDemandKw = demandIn.chillerDemandKw + predictionErrorMarginKw;
@@ -567,11 +567,10 @@ requiredMax = nan(numel(constraintName), 1);
 pass = false(numel(constraintName), 1);
 note = strings(numel(constraintName), 1);
 
-extremeMarginFactor = 1 + cfg.minExtremeCapacityMargin;
-requiredCooling = demand.chillerDemandKw * cfg.chillerSafetyFactor * extremeMarginFactor;
-requiredFan = demand.fanDemandKw * cfg.fanSafetyFactor * extremeMarginFactor;
-requiredPump = demand.pumpDemandKw * cfg.pumpSafetyFactor * extremeMarginFactor;
-requiredAhu = demand.ahuDemand * cfg.ahuSafetyFactor * extremeMarginFactor;
+requiredCoolingBase = demand.chillerDemandKw * cfg.chillerSafetyFactor;
+requiredFanBase = demand.fanDemandKw * cfg.fanSafetyFactor;
+requiredPumpBase = demand.pumpDemandKw * cfg.pumpSafetyFactor;
+requiredAhuBase = demand.ahuDemand * cfg.ahuSafetyFactor;
 
 fanRatio = scheme.totalFanCapacityKw / max(scheme.totalCoolingCapacityKw, eps);
 pumpRatio = scheme.totalPumpCapacityKw / max(scheme.totalCoolingCapacityKw, eps);
@@ -589,14 +588,14 @@ pass(2) = actualValue(2) >= requiredMin(2);
 note(2) = "避免在代表负荷下选择过度偏大的制冷容量";
 
 actualValue(3:6) = [
-    (scheme.totalCoolingCapacityKw - requiredCooling) / requiredCooling
-    (scheme.totalFanCapacityKw - requiredFan) / requiredFan
-    (scheme.totalPumpCapacityKw - requiredPump) / requiredPump
-    (scheme.totalAhuAirflow - requiredAhu) / requiredAhu
+    (scheme.totalCoolingCapacityKw - requiredCoolingBase) / requiredCoolingBase
+    (scheme.totalFanCapacityKw - requiredFanBase) / requiredFanBase
+    (scheme.totalPumpCapacityKw - requiredPumpBase) / requiredPumpBase
+    (scheme.totalAhuAirflow - requiredAhuBase) / requiredAhuBase
 ];
 requiredMin(3:6) = cfg.minExtremeCapacityMargin;
 pass(3:6) = actualValue(3:6) >= requiredMin(3:6);
-note(3:6) = "容量在安全系数和预测误差修正后仍需保留显式裕量";
+note(3:6) = "容量在安全系数和预测误差修正后需达到最小极端裕量";
 
 actualValue(7:9) = [fanRatio; pumpRatio; ahuRatio];
 requiredMin(7:9) = [

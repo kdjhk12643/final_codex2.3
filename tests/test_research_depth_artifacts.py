@@ -33,6 +33,18 @@ def test_cluster_ablation_is_implemented_in_step3():
     assert "clusterFeatureName" in step3
 
 
+def test_fair_model_comparison_is_implemented_in_step3():
+    step3 = read_text(ROOT / "step3_load_prediction.m")
+
+    assert "step3_fair_model_comparison.csv" in step3
+    assert "runFairModelComparison" in step3
+    assert "lstm_with_lag" in step3
+    assert "bp_with_lag" in step3
+    assert "lstm_without_lag" in step3
+    assert "bp_without_lag" in step3
+    assert "usesLagFeatures" in step3
+
+
 def test_engineering_constraints_are_implemented_in_step4():
     config = read_text(ROOT / "config.m")
     step4 = read_text(ROOT / "step4_capacity_optimization.m")
