@@ -1,6 +1,6 @@
-sensitivityType,currentSetting,expectedInfluence,recommendedCheck,riskLevel
-design_quantile,"capacity scenario=extreme, quantile=P99",Raising P95 to P99 increases required installed capacity and reduces undersizing risk,"Report P50/P95/P99 demand table and explain why P99 is selected for optimization",medium
-safety_factor,"chiller 1.09, fan 1.07, pump 1.07, AHU 1.05",Higher safety factors increase reliability but weaken redundancy and cost reduction,"Re-run with +/- 0.02 safety-factor changes before construction-level design",medium
-topsis_weight,"cost 0.55, redundancy 0.45",Higher cost weight favors cheaper schemes; higher redundancy weight favors tighter capacity,"Compare 0.50/0.50, 0.55/0.45, and 0.70/0.30 rankings if the recommended scheme is disputed",medium
-electricity_price,"0.85 yuan/kWh",Higher electricity price increases the value of efficient part-load operation,"Use local tariff and operating schedule when converting thesis results to a project estimate",low
-prediction_error,"LSTM RMSE should be compared with 6.06% minimum extreme margin",Positive prediction bias oversizes equipment; negative peak-load error can erode safety margin,"Reserve additional engineering margin or calibrate with measured peak data before final equipment selection",high
+敏感性类型,当前设置,预期影响,建议校核,风险等级
+设计分位数,"容量情景=extreme，分位数=P99",由 P95 提高到 P99 会增加所需装机容量并降低欠配风险,报告 P50/P95/P99 需求表，并说明为何选择 P99 用于优化,中
+安全系数,"冷机 1.09, 风机 1.07, 水泵 1.07, AHU 1.05",安全系数越高，可靠性越强，但冗余率和成本降低幅度会减弱,施工图级设计前，建议对安全系数做 +/- 0.02 扰动复算,中
+TOPSIS权重,"成本 0.55, 冗余 0.45",成本权重越高越偏向低成本方案，冗余权重越高越偏向紧凑容量方案,若推荐方案存在争议，可比较 0.50/0.50、0.55/0.45 和 0.70/0.30 权重排序,中
+电价,"0.85 元/kWh",电价越高，部分负荷高效运行带来的价值越大,将论文结果转为工程估算时，应使用当地电价和实际运行时段,低
+预测误差,"LSTM RMSE 应与 6.06% 最小极端裕量比较",正向预测偏差会导致设备偏大，负向峰值误差会侵蚀安全裕量,最终选型前应保留额外工程裕量，或用实测峰值数据校准模型,高

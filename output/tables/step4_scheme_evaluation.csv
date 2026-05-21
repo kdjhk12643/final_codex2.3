@@ -1,3 +1,3 @@
-scheme,totalCoolingCapacityKw,lifecycleCost,redundancyRate,initialCost,annualEnergyKwh,annualChillerEnergyKwh,annualFanEnergyKwh,annualPumpEnergyKwh,meanChillerPLR,meanCOP,costReductionRate,redundancyReductionRate,energySavingRate
-baseline,560,2178599,0.3451494,802120,122987,95862.54,13562.21,13562.21,0.5171931,4.698936,0,0,0
-optimized,480,1936720,0.130635,684860,113690.6,91086.88,12055.31,10548.39,0.750016,5.036895,0.1110247,0.6215118,0.0755883
+方案,总制冷容量_kW,生命周期成本,综合冗余率,初投资,年能耗_kWh,年冷机能耗_kWh,年风机能耗_kWh,年水泵能耗_kWh,平均冷机负荷率,平均COP,成本降低率,冗余降低率,节能率
+基准方案,560,2178599,0.3451494,802120,122987,95862.54,13562.21,13562.21,0.5171931,4.698936,0,0,0
+优化方案,480,1936720,0.130635,684860,113690.6,91086.88,12055.31,10548.39,0.750016,5.036895,0.1110247,0.6215118,0.0755883
