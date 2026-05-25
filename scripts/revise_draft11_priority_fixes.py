@@ -105,20 +105,20 @@ def improve_formula_paragraphs(doc: Document) -> None:
         ("Q = Qp + Qf + Qe + Qm", "（2-1）"): "Q = Q_p + Q_f + Q_e + Q_m\t（2-1）",
         ("r = cov(X,Y) / (sigma_X sigma_Y)", "（2-2）"): "r_{XY} = cov(X,Y) / (σ_X σ_Y)\t（2-2）",
         ("J = sum sum ||xi - mu_k||^2", "（2-3）"): "J = Σ_{k=1}^{K} Σ_{x_i∈C_k} ||x_i - μ_k||²\t（2-3）",
-        ("R = (C - Qmax) / Qmax × 100%", "（2-4）"): "R = (C - Q_max) / Q_max × 100%\t（2-4）",
-        ("f1 = min LCC", "（2-5）"): "f_1 = min LCC\t（2-5）",
-        ("f2 = min R", "（2-6）"): "f_2 = min R\t（2-6）",
-        ("RMSE = sqrt(1/n sum(yi - yhat_i)^2)", "（4-4）"): "RMSE = √[(1/n) Σ_{i=1}^{n}(y_i - ŷ_i)²]\t（4-4）",
-        ("MAE = 1/n sum |yi - yhat_i|", "（4-5）"): "MAE = (1/n) Σ_{i=1}^{n}|y_i - ŷ_i|\t（4-5）",
-        ("MAPE = 1/n sum |(yi - yhat_i) / yi| × 100%", "（4-6）"): "MAPE = (1/n) Σ_{i=1}^{n}|(y_i - ŷ_i)/y_i| × 100%\t（4-6）",
-        ("R² = 1 - sum(yi - yhat_i)^2 / sum(yi - ybar)^2", "（4-7）"): "R² = 1 - [Σ_{i=1}^{n}(y_i - ŷ_i)²] / [Σ_{i=1}^{n}(y_i - ȳ)²]\t（4-7）",
+        ("R = (C - Qmax) / Qmax × 100%", "（2-4）"): "R = (C - Qmax) / Qmax × 100%\t（2-4）",
+        ("f1 = min LCC", "（2-5）"): "f₁ = min LCC\t（2-5）",
+        ("f2 = min R", "（2-6）"): "f₂ = min R\t（2-6）",
+        ("RMSE = sqrt(1/n sum(yi - yhat_i)^2)", "（4-4）"): "RMSE = √[(1/n)Σ(yᵢ - ŷᵢ)²]\t（4-4）",
+        ("MAE = 1/n sum |yi - yhat_i|", "（4-5）"): "MAE = (1/n)Σ|yᵢ - ŷᵢ|\t（4-5）",
+        ("MAPE = 1/n sum |(yi - yhat_i) / yi| × 100%", "（4-6）"): "MAPE = (1/n)Σ|(yᵢ - ŷᵢ)/yᵢ| × 100%\t（4-6）",
+        ("R² = 1 - sum(yi - yhat_i)^2 / sum(yi - ybar)^2", "（4-7）"): "R² = 1 - Σ(yᵢ - ŷᵢ)² / Σ(yᵢ - ȳ)²\t（4-7）",
         ("Q_d = Q_{0.99} + RMSE_LSTM", "（5-1）"): "Q_d = Q_{0.99} + RMSE_LSTM\t（5-1）",
         ("LCC = C_0 + sum_{t=1}^{N} C_{o,t}/(1+r)^t + sum_{t=1}^{N} C_{m,t}/(1+r)^t", "（5-2）"): "LCC = C_0 + Σ_{t=1}^{N} C_{o,t}/(1+r)^t + Σ_{t=1}^{N} C_{m,t}/(1+r)^t\t（5-2）",
         ("C_0 = C_ch + C_f + C_p + C_ahu = sum_k n_k q_k u_k", "（5-3）"): "C_0 = C_ch + C_f + C_p + C_ahu = Σ_k n_k q_k u_k\t（5-3）",
-        ("f1 = min LCC", "（5-4）"): "f_1 = min LCC\t（5-4）",
+        ("f1 = min LCC", "（5-4）"): "f₁ = min LCC\t（5-4）",
         ("R_c = (C_c - alpha Q_d) / (alpha Q_d)", "（5-5）"): "R_c = (C_c - αQ_d) / (αQ_d)\t（5-5）",
         ("R = w_c R_c + w_f R_f + w_p R_p + w_ahu R_ahu", "（5-6）"): "R = w_cR_c + w_fR_f + w_pR_p + w_ahuR_ahu\t（5-6）",
-        ("f2 = min R", "（5-7）"): "f_2 = min R\t（5-7）",
+        ("f2 = min R", "（5-7）"): "f₂ = min R\t（5-7）",
         ("C_c >= alpha Q_d", "（5-8）"): "C_c ≥ αQ_d\t（5-8）",
         ("C_f >= alpha D_f", "（5-9）"): "C_f ≥ αD_f\t（5-9）",
         ("C_p >= alpha D_p", "（5-10）"): "C_p ≥ αD_p\t（5-10）",
@@ -152,8 +152,8 @@ def insert_page_break_before_caption(doc: Document, caption_text: str) -> None:
 def shrink_pareto_figure(doc: Document) -> None:
     if len(doc.inline_shapes) >= 15:
         fig = doc.inline_shapes[14]
-        fig.width = Inches(4.9)
-        fig.height = Inches(3.28)
+        fig.width = Inches(4.2)
+        fig.height = Inches(2.81)
 
 
 def main() -> None:
@@ -211,6 +211,11 @@ def main() -> None:
 
     # 3. 公式：把程序式写法改为规范数学表达。
     improve_formula_paragraphs(doc)
+    replace_contains(
+        doc,
+        "式中，yi 为真实负荷值",
+        "式中，yᵢ 为真实负荷值，ŷᵢ 为模型预测值，ȳ 为真实负荷均值，n 为测试样本数量。",
+    )
 
     # 4. LSTM 与 BP 结论：强调“当前输入设置下”的比较，避免绝对化。
     replace_contains(
