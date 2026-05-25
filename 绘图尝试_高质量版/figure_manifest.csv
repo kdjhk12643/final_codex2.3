@@ -1,0 +1,36 @@
+序号,章节,图名,说明,PNG,PDF
+1,一、研究流程与方法框架,图1-1 技术路线图,展示从数据预处理、特征分析、负荷预测到容量优化和工程评价的完整研究链路。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_1_1_research_route.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_1_1_research_route.pdf
+2,一、研究流程与方法框架,图1-2 数据生成与变量关系图,说明客流、气象、站内环境和负荷分项之间的关系，用于支撑数据集构造逻辑。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_1_2_data_mechanism.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_1_2_data_mechanism.pdf
+3,二、数据质量与负荷特性,图2-1 全年日均总冷负荷时序图,按日平均展示全年冷负荷变化，夏季高负荷区间明显高于过渡季和冬季。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_1_annual_daily_load.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_1_annual_daily_load.pdf
+4,二、数据质量与负荷特性,图2-2 夏季典型周总冷负荷时序图,选取 2025-07-07 至 2025-07-13，展示周内负荷峰谷与工作日/周末差异。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_2_summer_week_load.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_2_summer_week_load.pdf
+5,二、数据质量与负荷特性,图2-3 月平均总冷负荷变化图,展示负荷季节性变化，可用于说明夏季容量配置需求更高。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_3_monthly_load.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_3_monthly_load.pdf
+6,二、数据质量与负荷特性,图2-4 工作日与周末日内平均负荷曲线图,对比工作日与周末的日内负荷形态，为典型日模式分析提供依据。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_4_weekday_weekend_profile.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_4_weekday_weekend_profile.pdf
+7,二、数据质量与负荷特性,图2-5 不同日类型典型负荷曲线对比图,对比四类日负荷模式，说明客流峰型和运行日类型对负荷曲线形态的影响。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_5_day_type_profiles.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_5_day_type_profiles.pdf
+8,二、数据质量与负荷特性,图2-6 负荷分项平均构成图,展示人员、新风、围护结构和设备散热负荷在总负荷中的相对贡献。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_6_component_ratio.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_6_component_ratio.pdf
+9,二、数据质量与负荷特性,图2-7 月平均分项负荷堆叠图,展示全年各月份分项负荷构成变化，说明季节项和围护结构负荷的影响。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_7_monthly_components.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_7_monthly_components.pdf
+10,二、数据质量与负荷特性,图2-8 原始数据缺失值统计图,展示关键变量中的缺失值数量，用于说明缺失值填补的必要性。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_8_missing_values.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_8_missing_values.pdf
+11,二、数据质量与负荷特性,图2-9 负荷持续曲线图,用于观察高负荷持续时间和长期部分负荷运行特征。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_2_9_load_duration.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_2_9_load_duration.pdf
+12,三、影响因素分析与典型日聚类,图3-1 Pearson 特征相关性排名图,展示与总冷负荷相关性最高的特征，滞后负荷和客流特征排序靠前。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_3_1_pearson_ranking.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_3_1_pearson_ranking.pdf
+13,三、影响因素分析与典型日聚类,图3-2 关键变量相关性热力图,展示客流、环境、分项负荷与总冷负荷之间的相关结构。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_3_2_correlation_heatmap.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_3_2_correlation_heatmap.pdf
+14,三、影响因素分析与典型日聚类,图3-3 不同 K 值聚类轮廓系数对比图,比较候选聚类数 K=2、3、4 的平均轮廓系数，当前 K=4 最高。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_3_3_silhouette.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_3_3_silhouette.pdf
+15,三、影响因素分析与典型日聚类,图3-4 K-Means 典型日聚类中心曲线图,将每类日负荷曲线取均值，展示典型日模式的差异。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_3_4_cluster_centers.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_3_4_cluster_centers.pdf
+16,四、负荷预测模型与效果评价,图4-1 LSTM 输入序列构造图,展示 16 个 15 分钟历史步长构成 4 小时输入窗口，用于预测下一时刻总冷负荷。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_4_1_lstm_sequence.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_4_1_lstm_sequence.pdf
+17,四、负荷预测模型与效果评价,图4-2 LSTM 网络结构图,展示项目中的两层 LSTM 网络结构：Sequence Input -> LSTM(96) -> LSTM(48) -> Fully Connected -> Regression。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_4_2_lstm_architecture.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_4_2_lstm_architecture.pdf
+18,四、负荷预测模型与效果评价,图4-3 BP 神经网络结构图,展示 BP 对比模型的前馈网络结构，用于与 LSTM 时序模型比较。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_4_3_bp_architecture.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_4_3_bp_architecture.pdf
+19,四、负荷预测模型与效果评价,图4-4 LSTM 测试集预测效果图,比较测试集真实负荷与 LSTM 预测负荷，展示时序模型对峰谷变化的跟踪能力。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_4_4_lstm_prediction.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_4_4_lstm_prediction.pdf
+20,四、负荷预测模型与效果评价,图4-5 BP 测试集预测效果图,比较测试集真实负荷与 BP 预测负荷，用于说明静态基准模型的预测偏差。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_4_5_bp_prediction.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_4_5_bp_prediction.pdf
+21,四、负荷预测模型与效果评价,图4-6 LSTM 与 BP 预测误差指标对比图,比较两类模型的 RMSE、MAE 和 MAPE，LSTM 在主预测结果中误差更低。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_4_6_model_metrics.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_4_6_model_metrics.pdf
+22,四、负荷预测模型与效果评价,图4-7 聚类标签消融实验结果图,比较加入典型日聚类标签前后的 LSTM 预测误差，用于量化聚类特征贡献。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_4_7_cluster_ablation.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_4_7_cluster_ablation.pdf
+23,四、负荷预测模型与效果评价,图4-8 公平输入模型比较图,在含滞后和不含滞后特征条件下比较 LSTM 与 BP，避免将输入信息量差异误读为模型结构差异。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_4_8_fair_comparison.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_4_8_fair_comparison.pdf
+24,五、容量优化与工程评价,图5-1 预测结果到容量需求转换图,说明 LSTM 完整预测曲线如何转换为 P50/P95/P99 情景需求，并进一步转为设备容量约束。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_1_prediction_to_capacity.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_1_prediction_to_capacity.pdf
+25,五、容量优化与工程评价,图5-2 子系统容量需求分位数对比图,比较总冷负荷、冷机、风机和水泵在不同置信分位下的容量需求。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_2_subsystem_quantiles.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_2_subsystem_quantiles.pdf
+26,五、容量优化与工程评价,图5-3 AHU 风量需求分位数图,单独展示 AHU 风量需求，避免与 kW 量纲混合。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_3_ahu_quantiles.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_3_ahu_quantiles.pdf
+27,五、容量优化与工程评价,图5-4 NSGA-II 与 TOPSIS 容量优化流程图,展示容量优化从设备编码、工程约束、双目标评价、Pareto 解集到 TOPSIS 推荐方案的流程。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_4_optimization_flow.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_4_optimization_flow.pdf
+28,五、容量优化与工程评价,图5-5 容量优化 Pareto 前沿图,展示生命周期成本与综合冗余率之间的权衡关系，红点为 TOPSIS 推荐方案。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_5_pareto_front.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_5_pareto_front.pdf
+29,五、容量优化与工程评价,图5-6 TOPSIS 候选方案得分排序图,展示 Pareto 候选方案的 TOPSIS 得分，得分越高表示越接近低成本、低冗余理想方案。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_6_topsis_ranking.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_6_topsis_ranking.pdf
+30,五、容量优化与工程评价,图5-7 基准方案与优化方案综合对比图,从装机容量、生命周期成本、冗余率和年能耗四方面比较优化效果。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_7_scheme_comparison.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_7_scheme_comparison.pdf
+31,五、容量优化与工程评价,图5-8 子系统容量冗余率对比图,比较冷机、风机、水泵和 AHU 在优化前后的容量冗余率。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_8_subsystem_redundancy.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_8_subsystem_redundancy.pdf
+32,五、容量优化与工程评价,图5-9 工程约束校核结果图,展示推荐方案在预测误差裕量、最小负荷率、极端容量裕量和子系统匹配约束下均通过校核。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_9_engineering_constraints.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_9_engineering_constraints.pdf
+33,五、容量优化与工程评价,图5-10 关键参数敏感性风险等级图,展示设计分位数、安全系数、TOPSIS 权重、电价和预测误差等因素的敏感性风险。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_10_sensitivity_risk.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_10_sensitivity_risk.pdf
+34,五、容量优化与工程评价,图5-11 工程边界与详细设计补充图,说明当前论文级方法验证与施工图级工程设计之间的边界。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_11_engineering_boundary.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_11_engineering_boundary.pdf
+35,五、容量优化与工程评价,图5-12 研究链路证据矩阵图,汇总特征分析、聚类分析、预测结果和容量优化之间的证据链路。,D:\桌面\codex2.3\绘图尝试_高质量版\figures_png\Fig_5_12_research_linkage.png,D:\桌面\codex2.3\绘图尝试_高质量版\figures_pdf\Fig_5_12_research_linkage.pdf

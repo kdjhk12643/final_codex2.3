@@ -1,0 +1,191 @@
+DRAFT	毕业设计论文初稿04_规范与结果修订最终版.docx	1089668
+COUNTS	paragraphs=475	nonempty=423	tables=13	images=13	sections=4	cn_chars=24268	latin_words=1264
+
+SECTIONS
+{"i": 1, "page_w_cm": 21.0, "page_h_cm": 29.7, "top_cm": 3.0, "bottom_cm": 2.5, "left_cm": 3.0, "right_cm": 2.0, "footer_cm": 1.5, "header_cm": 1.5, "start_type": "NEW_PAGE (2)"}
+{"i": 2, "page_w_cm": 21.0, "page_h_cm": 29.7, "top_cm": 3.0, "bottom_cm": 2.5, "left_cm": 3.0, "right_cm": 2.0, "footer_cm": 1.5, "header_cm": 1.5, "start_type": "NEW_PAGE (2)"}
+{"i": 3, "page_w_cm": 21.0, "page_h_cm": 29.7, "top_cm": 3.0, "bottom_cm": 2.5, "left_cm": 3.0, "right_cm": 2.0, "footer_cm": 1.5, "header_cm": 1.5, "start_type": "NEW_PAGE (2)"}
+{"i": 4, "page_w_cm": 21.0, "page_h_cm": 29.7, "top_cm": 3.0, "bottom_cm": 2.5, "left_cm": 3.0, "right_cm": 2.0, "footer_cm": 1.5, "header_cm": 1.5, "start_type": "NEW_PAGE (2)"}
+
+STYLE_USAGE
+Normal	366
+Heading 2	40
+Heading 1	11
+Body Text Indent	2
+正文1	2
+Heading 3	2
+
+STYLE_INFO
+{"Normal": {"name": null, "size_pt": 12.0, "bold": null, "italic": null}, "Heading 1": {"name": null, "size_pt": null, "bold": null, "italic": null}, "Heading 2": {"name": null, "size_pt": 15.0, "bold": true, "italic": null}, "Heading 3": {"name": null, "size_pt": 14.0, "bold": true, "italic": null}, "Body Text Indent": {"name": null, "size_pt": 14.0, "bold": null, "italic": null}}
+
+RUN_FONTS_TOP
+|	32738
+
+RUN_SIZES_TOP
+	30576
+12.0	1677
+10.5	384
+16.0	101
+
+HEADINGS
+0036	Heading 1	摘 要
+0042	Normal	Abstract:
+0044	正文1	Key words: Metro Station; Load Characteristic Analysis; LSTM Prediction Model; Genetic Algorithm; Capacity Optimization
+0049	Heading 1	1 绪论
+0050	Heading 2	1.1 研究背景
+0055	Heading 2	1.2 研究目的与意义
+0063	Heading 2	1.3 国内外研究现状
+0068	Heading 2	1.4 研究内容与技术路线
+0082	Heading 2	1.5 本章小结
+0085	Heading 1	2 地铁车站通风空调系统负荷特性与容量配置理论基础
+0086	Heading 2	2.1 地铁车站通风空调系统组成
+0095	Heading 2	2.2 站台区域空调负荷构成
+0107	Heading 2	2.3 负荷影响因素分析
+0118	Heading 2	2.4 典型负荷模式识别理论
+0126	Heading 2	2.5 容量配置优化问题描述
+0149	Heading 2	2.6 多目标优化与综合评价方法
+0159	Heading 2	2.7 本章小结
+0162	Heading 1	3 数据预处理与负荷特性分析
+0163	Heading 2	3.1 数据清洗与预处理
+0177	Heading 2	3.2 基于 Pearson 相关系数的关键影响因素筛选
+0191	Heading 2	3.3 负荷分项分解
+0200	Heading 2	3.4 基于 K-Means 的典型负荷曲线聚类
+0220	Heading 2	3.5 本章小结
+0223	Heading 1	4 基于 LSTM 的地铁车站空调负荷预测模型
+0224	Heading 2	4.1 负荷预测问题描述
+0230	Heading 2	4.2 预测输入特征构建
+0242	Heading 2	4.3 LSTM 神经网络模型构建
+0259	Heading 2	4.4 BP 神经网络对比模型
+0263	Heading 2	4.5 模型评价指标
+0279	Heading 2	4.6 预测结果与对比分析
+0295	Heading 2	4.7 本章小结
+0298	Heading 1	5 地铁车站通风空调系统容量配置多目标优化
+0299	Heading 2	5.1 容量配置优化对象与决策变量
+0318	Heading 2	5.2 设计负荷确定
+0325	Heading 2	5.3 优化目标函数
+0327	Heading 3	5.3.1 全生命周期成本目标
+0338	Heading 3	5.3.2 容量冗余率目标
+0349	Heading 2	5.4 工程约束条件
+0366	Heading 2	5.5 NSGA-II 多目标优化模型
+0381	Heading 2	5.6 基于 TOPSIS 的综合最优方案选择
+0396	Heading 2	5.7 优化结果概述
+0408	Heading 2	5.8 本章小结
+0411	Heading 1	6 优化结果分析
+0412	Heading 2	6.1 基准方案与优化方案对比
+0421	Heading 2	6.2 容量冗余率分析
+0425	Heading 2	6.3 全生命周期成本分析
+0430	Heading 2	6.4 年运行能耗与节能效果分析
+0440	Heading 2	6.5 设备匹配性分析
+0447	Heading 2	6.6 调节灵活性与运行适应性分析
+0452	Heading 2	6.7 既有车站改造适配性分析
+0457	Heading 2	6.8 本章小结
+0460	Heading 1	7 结论
+0470	Heading 1	致 谢
+0472	Heading 1	参考文献
+0475	Heading 1	附录1
+
+H1_BREAKS
+{"idx": 36, "text": "摘 要", "p_has_pageBreakBefore": true, "prev_has_pagebreak": false}
+{"idx": 49, "text": "1 绪论", "p_has_pageBreakBefore": true, "prev_has_pagebreak": false}
+{"idx": 85, "text": "2 地铁车站通风空调系统负荷特性与容量配置理论基础", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+{"idx": 162, "text": "3 数据预处理与负荷特性分析", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+{"idx": 223, "text": "4 基于 LSTM 的地铁车站空调负荷预测模型", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+{"idx": 298, "text": "5 地铁车站通风空调系统容量配置多目标优化", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+{"idx": 411, "text": "6 优化结果分析", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+{"idx": 460, "text": "7 结论", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+{"idx": 470, "text": "致 谢", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+{"idx": 472, "text": "参考文献", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+{"idx": 475, "text": "附录1", "p_has_pageBreakBefore": true, "prev_has_pagebreak": true}
+
+TOC_AROUND
+
+ABSTRACT_KEYWORDS
+-- abstract_en --
+0042	Normal	Abstract:
+0043	正文1	This thesis studies the ventilation and air-conditioning system of a metro station platform area and proposes a load-characteristic-based capacity configuration optimization method. Using a 15-minute annual operating dataset of Fuzhou Metro Dongjiekou Station in 2025, the study completes data preprocessing, Pearson correlation analysis, load component decomposition and K-Means daily load clustering. A two-layer LSTM model is then established for cooling-load prediction and compared with a BP neural network. Based on the predicted load demand, a multi-objective capacity optimization model is built with lifecycle cost and composite capacity redundancy as objectives. NSGA-II is used to generate Pareto candidate schemes, and TOPSIS is used to select the recommended configuration. The results show that the LSTM model achieves RMSE = 9.58 kW, MAE = 7.20 kW, MAPE = 3.86% and R² = 0.9709 on the test set. The recommended scheme reduces total cooling capacity from 560 kW to 480 kW, composite redundancy from 33.35% to 14.05%, lifecycle cost by 10.81%, and annual operating energy consumption by 7.09%. The proposed method can support energy-saving design and retrofit decision-making for metro station HVAC systems.
+0044	正文1	Key words: Metro Station; Load Characteristic Analysis; LSTM Prediction Model; Genetic Algorithm; Capacity Optimization
+0049	Heading 1	1 绪论
+0050	Heading 2	1.1 研究背景
+0051	Normal	随着城市轨道交通建设规模不断扩大，地铁已经成为大中型城市公共交通体系中的重要组成部分。地铁车站通常位于地下空间，具有围护结构封闭、人员密度变化大、设备发热集中、运行时间长等特点。为保证站台区域的热舒适性、空气品质和设备安全运行，通风空调系统需要长期承担温湿度调节、新风供给、排热排湿和空气组织控制等任务。因此，通风空调系统是地铁车站机电系统中能耗占比较高、运行调节较复杂的关键系统之一。
+0052	Normal	传统地铁车站通风空调系统容量配置通常依据设计峰值工况、远期客流预测和一定安全裕度确定。该方法能够保证系统在极端工况下具备足够的供冷和通风能力，但也容易带来设备容量偏大、初投资增加和长期低负荷运行等问题。在实际运营中，车站客流具有明显的早晚高峰、工作日与节假日差异，同时室外气象条件也随时间持续波动。若设备容量配置不能准确反映实际负荷变化规律，冷水机组、风机、水泵等设备将长期处于部分负荷状态，导致系统综合能效下降，节能运行空间受限。
+0053	Normal	近年来，随着数据采集、运行监测和智能优化技术的发展，基于实际运行数据开展地铁车站通风空调负荷分析和容量优化成为可能。通过采集客流、气象、站内环境和设备运行数据，可以识别影响系统负荷变化的关键因素，建立负荷预测模型，并进一步结合多目标优化算法形成更加合理的设备容量配置方案。与单纯依赖设计峰值的容量配置方法相比，基于负荷特性的优化方法更能体现车站实际运行需求，有助于降低容量冗余、减少全生命周期成本并提升系统运行效率。
+-- keywords_en --
+0044	正文1	Key words: Metro Station; Load Characteristic Analysis; LSTM Prediction Model; Genetic Algorithm; Capacity Optimization
+0049	Heading 1	1 绪论
+0050	Heading 2	1.1 研究背景
+0051	Normal	随着城市轨道交通建设规模不断扩大，地铁已经成为大中型城市公共交通体系中的重要组成部分。地铁车站通常位于地下空间，具有围护结构封闭、人员密度变化大、设备发热集中、运行时间长等特点。为保证站台区域的热舒适性、空气品质和设备安全运行，通风空调系统需要长期承担温湿度调节、新风供给、排热排湿和空气组织控制等任务。因此，通风空调系统是地铁车站机电系统中能耗占比较高、运行调节较复杂的关键系统之一。
+0052	Normal	传统地铁车站通风空调系统容量配置通常依据设计峰值工况、远期客流预测和一定安全裕度确定。该方法能够保证系统在极端工况下具备足够的供冷和通风能力，但也容易带来设备容量偏大、初投资增加和长期低负荷运行等问题。在实际运营中，车站客流具有明显的早晚高峰、工作日与节假日差异，同时室外气象条件也随时间持续波动。若设备容量配置不能准确反映实际负荷变化规律，冷水机组、风机、水泵等设备将长期处于部分负荷状态，导致系统综合能效下降，节能运行空间受限。
+0053	Normal	近年来，随着数据采集、运行监测和智能优化技术的发展，基于实际运行数据开展地铁车站通风空调负荷分析和容量优化成为可能。通过采集客流、气象、站内环境和设备运行数据，可以识别影响系统负荷变化的关键因素，建立负荷预测模型，并进一步结合多目标优化算法形成更加合理的设备容量配置方案。与单纯依赖设计峰值的容量配置方法相比，基于负荷特性的优化方法更能体现车站实际运行需求，有助于降低容量冗余、减少全生命周期成本并提升系统运行效率。
+0054	Normal	本文以地铁车站站台区域通风空调系统为研究对象，围绕负荷特性分析、负荷预测建模和容量配置优化展开研究。研究工作以 MATLAB R2022b 为主要计算平台，按照“数据准备、影响因素分析、负荷预测建模、容量配置优化、方案评估”的技术路线，构建面向工程应用的地铁车站通风空调系统容量配置优化方法。
+0055	Heading 2	1.2 研究目的与意义
+
+FIG_CAPTIONS
+0079	图1-1 技术路线图
+0089	图2-1 地铁车站通风空调系统组成示意图
+0165	图3-1 站台总冷负荷时间序列图
+0172	图3-2 缺失值统计图
+0179	图3-3 Pearson相关性排序图
+0193	图3-4 负荷分项占比图
+0202	图3-5 典型日负荷曲线聚类图
+0232	图4-1 预测样本构造示意图
+0243	图4-2 LSTM网络结构图：Sequence Input → LSTM(96) → LSTM(48) → Fully Connected → Regression Output
+0281	图4-3 LSTM预测结果图
+0283	图4-4 BP预测结果图
+0285	图4-5 模型RMSE对比图
+0368	图5-1 NSGA-II容量优化流程图
+0398	图5-2 Pareto前沿图
+0414	图6-1 基准方案与优化方案对比图
+
+TABLE_CAPTIONS
+0097	表2-1 站台区域负荷组成及影响因素
+0127	表2-2 容量配置优化对象
+0185	表3-1 关键影响因素相关性排序
+0196	表3-2 负荷分项平均占比
+0211	表3-3 不同聚类数的轮廓系数
+0244	表4-1 LSTM模型主要训练参数
+0288	表4-2 负荷预测模型评价指标
+0300	表5-2 经济性计算参数
+0313	表5-1 设备候选容量与台数范围
+0382	表5-3 TOPSIS排序结果
+0401	表5-4 基准方案与优化方案主要指标
+0415	表6-1 设备配置明细表
+0419	表6-2 基准方案与优化方案综合对比
+
+FORMULAS_PLAIN
+0104	Q = Qp + Qf + Qe + Qm
+0115	r = cov(X,Y) / (sigma_X sigma_Y)
+0153	f1 = min LCC
+0154	f2 = min R
+0209	s(i) = [b(i) - a(i)] / max{a(i), b(i)}
+0266	RMSE = sqrt(1/n sum(yi - yhat_i)^2)
+0321	Q_d = Q_{0.99} + RMSE_LSTM
+0329	LCC = C_0 + sum_{t=1}^{N} C_{o,t}/(1+r)^t + sum_{t=1}^{N} C_{m,t}/(1+r)^t
+0332	C_0 = C_ch + C_f + C_p + C_ahu = sum_k n_k q_k u_k
+0337	f1 = min LCC
+0340	R_c = (C_c - alpha Q_d) / (alpha Q_d)
+0343	R = w_c R_c + w_f R_f + w_p R_p + w_ahu R_ahu
+0346	f2 = min R
+
+FORMULA_NUMBERS
+
+
+TABLE_SUMMARIES
+{"i": 1, "rows": 5, "cols": 4, "first": "负荷类型 | 主要来源 | 主要影响因素 | 对容量配置的意义", "borders": []}
+{"i": 2, "rows": 5, "cols": 4, "first": "子系统 | 优化对象 | 决策内容 | 主要约束", "borders": []}
+{"i": 3, "rows": 11, "cols": 2, "first": "特征 | Pearson R", "borders": []}
+{"i": 4, "rows": 5, "cols": 3, "first": "分项 | 平均负荷/kW | 占比", "borders": []}
+{"i": 5, "rows": 4, "cols": 2, "first": "K | 平均轮廓系数", "borders": ["top:single", "left:none", "bottom:single", "right:none", "insideH:none", "insideV:none"]}
+{"i": 6, "rows": 10, "cols": 3, "first": "参数 | 取值 | 说明", "borders": []}
+{"i": 7, "rows": 3, "cols": 5, "first": "模型 | RMSE/kW | MAE/kW | MAPE/% | R²", "borders": []}
+{"i": 8, "rows": 10, "cols": 3, "first": "参数 | 取值 | 说明", "borders": []}
+{"i": 9, "rows": 5, "cols": 3, "first": "设备类型 | 候选容量或风量 | 台数范围", "borders": []}
+{"i": 10, "rows": 6, "cols": 4, "first": "排名 | 全生命周期成本/元 | 综合容量冗余率 | TOPSIS得分", "borders": []}
+{"i": 11, "rows": 3, "cols": 4, "first": "方案 | 冷源总容量/kW | 全生命周期成本/元 | 综合容量冗余率", "borders": []}
+{"i": 12, "rows": 3, "cols": 5, "first": "方案 | 冷水机组 | 风机 | 水泵 | 空气处理机组", "borders": []}
+{"i": 13, "rows": 8, "cols": 4, "first": "指标 | 基准方案 | 优化方案 | 变化幅度", "borders": []}
+
+REFERENCES
+ref_entries=0 citations=5 unique_citations=['[1]', '[2]', '[3]', '[6]', '[7]']
+
+PACKAGE
+{"comments": false, "track_changes_ins": 0, "track_changes_del": 0, "pgNumTypes": [{"fmt": "upperRoman", "start": "1"}, {"fmt": "upperRoman", "start": "1"}, {"start": "1"}], "footers": [["word/footer1.xml", "", ""], ["word/footer2.xml", "2", "PAGE   \\* MERGEFORMAT"]]}
