@@ -84,15 +84,16 @@ cfg.mapeMinLoadKw = 180;
 % LSTM
 % sequenceLength 表示每个 LSTM 样本输入的历史时间步数；15 分钟数据下 16 步覆盖 4 小时。
 cfg.sequenceLength = 16;
-cfg.lstmHiddenUnits = [96, 48];
-cfg.maxEpochs = 120;
-cfg.miniBatchSize = 32;
+% 快速复跑配置：控制单个 LSTM 训练在半小时内完成，答辩前需要精修指标时再调高。
+cfg.lstmHiddenUnits = [48, 24];
+cfg.maxEpochs = 35;
+cfg.miniBatchSize = 256;
 cfg.initialLearnRate = 0.0008;
 cfg.gradientThreshold = 1;
-cfg.validationPatience = 50;
-cfg.learnRateDropPeriod = 40;
+cfg.validationPatience = 8;
+cfg.learnRateDropPeriod = 15;
 cfg.learnRateDropFactor = 0.5;
-cfg.executionEnvironment = "cpu";
+cfg.executionEnvironment = "auto";
 
 % BP 神经网络参数。
 % BP 作为比 LSTM 更简单的对比预测模型。
@@ -169,7 +170,7 @@ cfg.ahuAirflowPerKw = 298;
 
 % 显示与图片输出参数。
 % showFigures 控制是否打开交互图窗，saveFigures 控制是否导出 PNG，showTrainingProgress 控制是否显示训练过程窗口。
-cfg.showFigures = true;
+cfg.showFigures = false;
 cfg.saveFigures = true;
-cfg.showTrainingProgress = true;
+cfg.showTrainingProgress = false;
 end

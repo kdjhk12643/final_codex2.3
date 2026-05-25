@@ -90,6 +90,29 @@ def test_dataset_contains_research_features_and_load_balance():
     assert data["exit_flow"].ge(0).all()
 
 
+def test_station_cooling_load_scale_and_component_ratios_are_engineering_plausible():
+    generator = load_generator_module()
+
+    data = generator.generate_station_data(seed=202507, missing_rate=0)
+    components = {
+        "people_load_kw": data["people_load_kw"].sum(),
+        "fresh_air_load_kw": data["fresh_air_load_kw"].sum(),
+        "envelope_load_kw": data["envelope_load_kw"].sum(),
+        "equipment_load_kw": data["equipment_load_kw"].sum(),
+    }
+    component_sum = sum(components.values())
+    ratios = {name: value / component_sum for name, value in components.items()}
+
+    assert 330 <= data["total_cooling_load_kw"].quantile(0.95) <= 520
+    assert 430 <= data["total_cooling_load_kw"].quantile(0.99) <= 620
+    assert 520 <= data["total_cooling_load_kw"].max() <= 760
+
+    assert 0.08 <= ratios["people_load_kw"] <= 0.18
+    assert 0.25 <= ratios["fresh_air_load_kw"] <= 0.45
+    assert 0.04 <= ratios["envelope_load_kw"] <= 0.14
+    assert 0.32 <= ratios["equipment_load_kw"] <= 0.52
+
+
 def test_day_type_profiles_are_separated_for_four_mode_clustering():
     generator = load_generator_module()
 
@@ -153,9 +176,14 @@ def test_config_targets_are_set_for_natural_optimization():
         "cfg.designConfidenceLevel = 0.90;",
         "cfg.extremeConfidenceLevel = 0.99;",
         "cfg.sequenceLength = 16;",
-        "cfg.miniBatchSize = 32;",
-        "cfg.maxEpochs = 120;",
-        "cfg.validationPatience = 50;",
+        "cfg.lstmHiddenUnits = [48, 24];",
+        "cfg.miniBatchSize = 256;",
+        "cfg.maxEpochs = 35;",
+        "cfg.validationPatience = 8;",
+        "cfg.learnRateDropPeriod = 15;",
+        "cfg.executionEnvironment = \"auto\";",
+        "cfg.showFigures = false;",
+        "cfg.showTrainingProgress = false;",
     ]
     for snippet in expected_snippets:
         assert snippet in config

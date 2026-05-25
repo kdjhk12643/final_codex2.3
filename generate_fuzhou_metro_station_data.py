@@ -180,13 +180,26 @@ def generate_station_data(
 
     hvac_operation_factor = np.select(
         [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
-        [1.30, 0.95, 1.08],
-        default=0.62,
+        [1.24, 0.98, 1.05],
+        default=0.72,
     )
-    people_load = 0.105 * data["platform_passengers"].to_numpy()
-    fresh_air_load = (7.8 + 0.105 * data["entry_flow"].to_numpy()) * np.maximum(outdoor_temp - 24, 0) / 10
-    envelope_load = (72 + 4.6 * np.maximum(outdoor_temp - 28, 0) + 0.014 * solar_radiation) * hvac_operation_factor
-    equipment_load = (48 + 0.012 * (data["entry_flow"].to_numpy() + data["exit_flow"].to_numpy())) * hvac_operation_factor
+    passenger_flow = data["entry_flow"].to_numpy() + data["exit_flow"].to_numpy()
+    platform_people = data["platform_passengers"].to_numpy()
+    sensible_index = np.maximum(outdoor_temp - 22, 0) / 10
+    latent_index = np.maximum(outdoor_rh - 62, 0) / 40
+    humid_cooling_index = np.clip(0.18 + 0.55 * sensible_index + 0.35 * latent_index, 0.12, 1.22)
+
+    # In this public-area model, fresh-air load also covers entrance/train-induced infiltration.
+    people_load = 0.11 * (0.85 * platform_people + 0.30 * passenger_flow)
+    fresh_air_load = (
+        65
+        + 0.17 * platform_people
+        + 1.25 * np.sqrt(passenger_flow + 1)
+    ) * humid_cooling_index * (0.82 + 0.18 * hvac_operation_factor)
+    envelope_load = (18 + 1.2 * np.maximum(outdoor_temp - 28, 0)) * (
+        0.93 + 0.07 * (season == "summer")
+    )
+    equipment_load = (72 + 0.05 * passenger_flow) * (0.85 + 0.15 * hvac_operation_factor)
 
     morning_peak = np.exp(-0.5 * ((hour_float - 8.0) / 0.82) ** 2)
     evening_peak = np.exp(-0.5 * ((hour_float - 18.0) / 0.92) ** 2)
@@ -197,34 +210,39 @@ def generate_station_data(
     operation_shape = np.select(
         [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
         [
-            1.00 + 0.18 * morning_peak + 0.17 * evening_peak,
-            0.94 + 0.11 * daytime_plateau + 0.08 * noon,
-            0.94 + 0.18 * weekend_leisure + 0.06 * noon,
+            0.98 + 0.10 * morning_peak + 0.09 * evening_peak,
+            0.96 + 0.05 * daytime_plateau + 0.04 * noon,
+            0.94 + 0.06 * weekend_leisure + 0.03 * noon,
         ],
-        default=0.90 + 0.04 * low_day,
+        default=0.92 + 0.03 * low_day,
     )
 
     type_load_factor = np.select(
         [day_type == "weekday_high", day_type == "weekday_medium", day_type == "weekend_single"],
-        [1.08, 0.99, 1.02],
-        default=0.93,
+        [1.15, 1.00, 1.04],
+        default=0.75,
     )
     season_load_factor = np.select(
         [season == "summer", season == "transition", season == "winter"],
-        [1.04, 1.00, 0.96],
+        [1.06, 1.00, 0.92],
         default=1.0,
     )
-    latent_internal = type_load_factor * (
-        1.02
-        + 0.12 * np.sin(2 * np.pi * (hour_float - 6) / 24)
-        + 0.055 * np.cos(2 * np.pi * day_of_month / 11)
+    internal_variation = (
+        1.00
+        + 0.035 * np.sin(2 * np.pi * (hour_float - 6) / 24)
+        + 0.020 * np.cos(2 * np.pi * day_of_month / 11)
     )
-    total_load = (people_load + fresh_air_load + envelope_load + equipment_load) * latent_internal * operation_shape * season_load_factor
-    total_load = total_load + rng.normal(0, 7.0, len(data))
+    total_load = (
+        people_load
+        + fresh_air_load
+        + envelope_load
+        + equipment_load
+    ) * operation_shape * type_load_factor * season_load_factor * internal_variation
+    total_load = total_load + rng.normal(0, 6.0, len(data))
 
     load_change = pd.Series(total_load).diff().fillna(0).to_numpy()
     control_load = pd.Series(total_load).rolling(4, min_periods=1).mean().shift(1, fill_value=total_load[0]).to_numpy()
-    chiller_stage = np.select([control_load < 130, control_load < 205, control_load < 270], [1, 2, 3], default=4)
+    chiller_stage = np.select([control_load < 170, control_load < 300, control_load < 430], [1, 2, 3], default=4)
     part_load_penalty = 1.0 + 0.045 * (chiller_stage - 1)
     chiller_load = control_load * 0.88 * part_load_penalty + 4.5 * chiller_stage + rng.normal(0, 10.5, len(data))
     fan_power = 16.5 + 0.012 * data["platform_passengers"].to_numpy() + 0.009 * data["entry_flow"].to_numpy() + 0.08 * np.maximum(load_change, 0)
