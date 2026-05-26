@@ -13,21 +13,24 @@ featureDataWithCluster = addClusterLabelFeature(cfg, featureData, analysisResult
 selectedFeaturesWithCluster = unique([selectedFeatures; clusterFeatureName], "stable");
 
 fprintf("  步骤 3.1 使用 %d 个筛选特征构建预测矩阵...\n", numel(selectedFeatures));
-% X 和 y 保持时间顺序，因此 splitIndexes 生成的是按时间划分的训练/验证/测试集，而非随机划分。
-[X, y] = buildMatrix(featureData, selectedFeatures, cfg.targetName);
-split = splitIndexes(numel(y), cfg);
+[X, y, timestamps] = buildPredictionMatrix(cfg, featureData, selectedFeatures, cfg.targetName);
+split = splitIndexes(numel(y), cfg, timestamps);
 fprintf("  样本数：总计=%d，训练=%d，验证=%d，测试=%d。\n", ...
     numel(y), numel(split.train), numel(split.val), numel(split.test));
+fprintf("  预测划分模式：%s；样本时间范围：%s 至 %s。\n", ...
+    cfg.predictionSplitMode, string(min(timestamps)), string(max(timestamps)));
 
 predictionResult.selectedFeatures = selectedFeatures;
 predictionResult.clusterFeatureName = clusterFeatureName;
 predictionResult.selectedFeaturesWithCluster = selectedFeaturesWithCluster;
 predictionResult.split = split;
+predictionResult.predictionSplitMode = cfg.predictionSplitMode;
+predictionResult.predictionTimestamps = timestamps;
 
 fprintf("  步骤 3.2 构建 LSTM 序列，序列长度 = %d...\n", cfg.sequenceLength);
 % LSTM 样本由历史特征行的滑动窗口构成。
-[XSeq, ySeq] = buildSequences(X, y, cfg.sequenceLength);
-seqSplit = splitIndexes(numel(ySeq), cfg);
+[XSeq, ySeq, seqTimestamps] = buildSequences(X, y, timestamps, cfg.sequenceLength);
+seqSplit = splitIndexes(numel(ySeq), cfg, seqTimestamps);
 
 fprintf("  步骤 3.3 训练 LSTM，最大轮数=%d，小批量大小=%d...\n", cfg.maxEpochs, cfg.miniBatchSize);
 predictionResult.lstm = trainLstmOrFallback(cfg, XSeq, ySeq, seqSplit);
@@ -37,8 +40,8 @@ bpFeatures = selectedFeatures(~startsWith(selectedFeatures, "load_lag_"));
 if isempty(bpFeatures)
     bpFeatures = selectedFeatures;
 end
-[Xbp, ybp] = buildMatrix(featureData, bpFeatures, cfg.targetName);
-bpSplit = splitIndexes(numel(ybp), cfg);
+[Xbp, ybp, bpTimestamps] = buildPredictionMatrix(cfg, featureData, bpFeatures, cfg.targetName);
+bpSplit = splitIndexes(numel(ybp), cfg, bpTimestamps);
 fprintf("  BP 基准模型使用 %d 个静态特征，并排除负荷滞后特征。\n", numel(bpFeatures));
 predictionResult.bpFeatures = bpFeatures;
 predictionResult.bp = trainBpOrFallback(cfg, Xbp, ybp, bpSplit);
@@ -63,7 +66,7 @@ predictionResult.fairModelComparison = runFairModelComparison( ...
 
 fprintf("  步骤 3.7 生成用于容量优化的完整预测负荷曲线...\n");
 % 完整预测曲线用于设计分位数和年能耗计算，不只用于测试集精度报告。
-predictionResult = generateLoadProfile(cfg, predictionResult, X, y);
+predictionResult = generateLoadProfile(cfg, predictionResult, X, y, timestamps);
 
 fprintf("  步骤 3.8 训练子系统回归模型（冷机、风机、水泵、AHU）...\n");
 % 这些回归模型用于把总冷负荷映射为子系统设备需求。
@@ -149,14 +152,14 @@ end
 
 function ablationTable = runClusterAblation(cfg, featureDataWithCluster, selectedFeatures, selectedFeaturesWithCluster, targetName)
 %RUNCLUSTERABLATION 对比带聚类标签和不带聚类标签的 LSTM 表现。
-[XBase, yBase] = buildMatrix(featureDataWithCluster, selectedFeatures, targetName);
-[XCluster, yCluster] = buildMatrix(featureDataWithCluster, selectedFeaturesWithCluster, targetName);
+[XBase, yBase, timestampsBase] = buildPredictionMatrix(cfg, featureDataWithCluster, selectedFeatures, targetName);
+[XCluster, yCluster, timestampsCluster] = buildPredictionMatrix(cfg, featureDataWithCluster, selectedFeaturesWithCluster, targetName);
 
-[XSeqBase, ySeqBase] = buildSequences(XBase, yBase, cfg.sequenceLength);
-[XSeqCluster, ySeqCluster] = buildSequences(XCluster, yCluster, cfg.sequenceLength);
+[XSeqBase, ySeqBase, seqTimestampsBase] = buildSequences(XBase, yBase, timestampsBase, cfg.sequenceLength);
+[XSeqCluster, ySeqCluster, seqTimestampsCluster] = buildSequences(XCluster, yCluster, timestampsCluster, cfg.sequenceLength);
 
-baseSplit = splitIndexes(numel(ySeqBase), cfg);
-clusterSplit = splitIndexes(numel(ySeqCluster), cfg);
+baseSplit = splitIndexes(numel(ySeqBase), cfg, seqTimestampsBase);
+clusterSplit = splitIndexes(numel(ySeqCluster), cfg, seqTimestampsCluster);
 
 withoutCluster = trainLstmOrFallback(cfg, XSeqBase, ySeqBase, baseSplit);
 withCluster = trainLstmOrFallback(cfg, XSeqCluster, ySeqCluster, clusterSplit);
@@ -209,9 +212,9 @@ function [model, featureSet, usesLagFeatures, featureCount, RMSE, MAE, MAPE, R2,
     appendFairComparisonRows(cfg, featureData, featureNames, targetName, setName, usesLag, ...
     existingLstmMetrics, model, featureSet, usesLagFeatures, featureCount, RMSE, MAE, MAPE, R2, row)
 %APPENDFAIRCOMPARISONROWS 添加同一特征组下的 LSTM 与 BP 指标。
-[X, y] = buildMatrix(featureData, featureNames, targetName);
-[XSeq, ySeq] = buildSequences(X, y, cfg.sequenceLength);
-seqSplit = splitIndexes(numel(ySeq), cfg);
+[X, y, timestamps] = buildPredictionMatrix(cfg, featureData, featureNames, targetName);
+[XSeq, ySeq, seqTimestamps] = buildSequences(X, y, timestamps, cfg.sequenceLength);
+seqSplit = splitIndexes(numel(ySeq), cfg, seqTimestamps);
 alignedX = X((cfg.sequenceLength + 1):end, :);
 
 if isempty(existingLstmMetrics)
@@ -245,29 +248,83 @@ R2(row) = bpMetrics.R2;
 row = row + 1;
 end
 
-function [X, y] = buildMatrix(featureData, selectedFeatures, targetName)
+function [X, y, timestamps] = buildPredictionMatrix(cfg, featureData, selectedFeatures, targetName)
+%BUILDPREDICTIONMATRIX 提取预测矩阵，并按配置选择评估窗口。
+[XAll, yAll, timestampsAll] = buildMatrix(featureData, selectedFeatures, targetName);
+[X, y, timestamps] = applyPredictionDataWindow(cfg, XAll, yAll, timestampsAll);
+end
+
+function [X, y, timestamps] = buildMatrix(featureData, selectedFeatures, targetName)
 %BUILDMATRIX 提取数值预测因子，并删除输入或目标缺失的样本。
 X = featureData{:, selectedFeatures};
 y = featureData.(targetName);
+timestamps = featureData.timestamp;
 valid = all(~isnan(X), 2) & ~isnan(y);
 X = X(valid, :);
 y = y(valid);
+timestamps = timestamps(valid);
 end
 
-function split = splitIndexes(n, cfg)
-%SPLITINDEXES 生成按时间顺序划分的训练、验证和测试索引。
+function [X, y, timestamps] = applyPredictionDataWindow(cfg, X, y, timestamps)
+%APPLYPREDICTIONDATAWINDOW 选择预测建模使用的全年或夏季数据窗口。
+mode = lower(string(cfg.predictionSplitMode));
+
+if mode == "summer_sequential"
+    mask = ismember(month(timestamps), cfg.predictionSeasonMonths);
+    X = X(mask, :);
+    y = y(mask);
+    timestamps = timestamps(mask);
+elseif mode == "random_full_year"
+    % 随机划分模式使用全年样本，具体随机索引在 splitIndexes 中生成。
+else
+    error("不支持的预测数据划分模式：%s", cfg.predictionSplitMode);
+end
+
+if numel(y) <= cfg.sequenceLength + 10
+    error("预测建模样本过少：当前模式 %s 仅得到 %d 个样本。", cfg.predictionSplitMode, numel(y));
+end
+end
+
+function split = splitIndexes(n, cfg, timestamps)
+%SPLITINDEXES 按配置生成训练、验证和测试索引。
 nTrain = floor(n * cfg.trainRatio);
 nVal = floor(n * cfg.valRatio);
-split.train = 1:nTrain;
-split.val = (nTrain + 1):(nTrain + nVal);
-split.test = (nTrain + nVal + 1):n;
+mode = lower(string(cfg.predictionSplitMode));
+
+if mode == "random_full_year"
+    oldState = rng;
+    rng(cfg.randomSplitSeed);
+    order = randperm(n);
+    rng(oldState);
+    split.train = sort(order(1:nTrain));
+    split.val = sort(order((nTrain + 1):(nTrain + nVal)));
+    split.test = sort(order((nTrain + nVal + 1):n));
+else
+    split.train = 1:nTrain;
+    split.val = (nTrain + 1):(nTrain + nVal);
+    split.test = (nTrain + nVal + 1):n;
 end
 
-function [XSeq, ySeq] = buildSequences(X, y, sequenceLength)
+split.trainTimeRange = timestampRange(timestamps, split.train);
+split.valTimeRange = timestampRange(timestamps, split.val);
+split.testTimeRange = timestampRange(timestamps, split.test);
+end
+
+function rangeText = timestampRange(timestamps, indexes)
+%TIMESTAMPRANGE 返回索引对应的时间范围文本。
+if isempty(indexes)
+    rangeText = "";
+else
+    rangeText = string(min(timestamps(indexes))) + " 至 " + string(max(timestamps(indexes)));
+end
+end
+
+function [XSeq, ySeq, seqTimestamps] = buildSequences(X, y, timestamps, sequenceLength)
 %BUILDSEQUENCES 将表格样本转换为 LSTM 所需的 cell 序列。
 n = size(X, 1) - sequenceLength;
 XSeq = cell(n, 1);
 ySeq = zeros(n, 1);
+seqTimestamps = timestamps((sequenceLength + 1):end);
 
 for i = 1:n
     % MATLAB 序列输入要求每个样本为“特征数 × 时间步”的布局。
@@ -390,19 +447,22 @@ metrics.MAPE = mean(abs(err ./ max(abs(yTrue), cfg.mapeMinLoadKw))) * 100;
 metrics.R2 = 1 - sum(err .^ 2) / sum((yTrue - mean(yTrue)) .^ 2);
 end
 
-function result = generateLoadProfile(cfg, result, X, y)
+function result = generateLoadProfile(cfg, result, X, y, timestamps)
 %GENERATELOADPROFILE 预测完整可用序列，用于后续容量配置。
 if strcmp(result.lstm.model, "fallback_moving_average")
     fullPrediction = result.yPredLSTM;
     fprintf("    警告：LSTM 模型不可用，仅使用测试集预测结果。\n");
 else
-    [XSeqFull, ~] = buildSequences(X, y, cfg.sequenceLength);
+    [XSeqFull, ~, seqTimestampsFull] = buildSequences(X, y, timestamps, cfg.sequenceLength);
     yPredNorm = predict(result.lstm.model, XSeqFull, "MiniBatchSize", cfg.miniBatchSize);
     fullPrediction = yPredNorm * result.lstm.targetStd + result.lstm.targetMean;
 end
 
 fullPrediction = fullPrediction(:);
 result.predictedTotalLoadKw = fullPrediction;
+if exist("seqTimestampsFull", "var")
+    result.predictedProfileTimestamps = seqTimestampsFull(:);
+end
 result.predictedProfile = struct();
 result.predictedProfile.totalCoolingLoadKw = fullPrediction;
 % designLoadKw 为选定置信分位数负荷；representativeLoadKw 为部分负荷和生命周期能耗计算使用的平均负荷。

@@ -78,6 +78,11 @@ cfg.rngSeed = 202507;
 cfg.trainRatio = 0.7;
 cfg.valRatio = 0.2;
 cfg.testRatio = 0.1;
+% 预测模型默认只取 6-9 月冷负荷高峰季，并在该窗口内按时间顺序 7:2:1 划分。
+% 若需要全年季节覆盖的随机评估，可改为 "random_full_year"。
+cfg.predictionSplitMode = "summer_sequential";
+cfg.predictionSeasonMonths = [6, 7, 8, 9];
+cfg.randomSplitSeed = cfg.rngSeed;
 % 防止真实负荷很小时 MAPE 分母过小导致百分比异常放大。
 cfg.mapeMinLoadKw = 180;
 

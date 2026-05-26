@@ -175,6 +175,9 @@ def test_config_targets_are_set_for_natural_optimization():
         "cfg.topsisWeights = [0.55, 0.45];",
         "cfg.designConfidenceLevel = 0.90;",
         "cfg.extremeConfidenceLevel = 0.99;",
+        "cfg.predictionSplitMode = \"summer_sequential\";",
+        "cfg.predictionSeasonMonths = [6, 7, 8, 9];",
+        "cfg.randomSplitSeed = cfg.rngSeed;",
         "cfg.sequenceLength = 16;",
         "cfg.lstmHiddenUnits = [48, 24];",
         "cfg.miniBatchSize = 256;",
@@ -189,3 +192,15 @@ def test_config_targets_are_set_for_natural_optimization():
         assert snippet in config
 
     assert re.search(r"cfg\.preferredClusterK\s*=\s*4;", config)
+
+
+def test_step3_supports_summer_sequential_and_random_full_year_splits():
+    root = Path(__file__).resolve().parents[1]
+    step3 = read_text(root / "step3_load_prediction.m")
+
+    assert "applyPredictionDataWindow" in step3
+    assert "cfg.predictionSplitMode" in step3
+    assert "summer_sequential" in step3
+    assert "cfg.predictionSeasonMonths" in step3
+    assert "random_full_year" in step3
+    assert "cfg.randomSplitSeed" in step3
